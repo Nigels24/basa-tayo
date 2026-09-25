@@ -15,14 +15,18 @@ export default function Result() {
   const { lastResult, progress } = useSession();
   const router = useRouter();
 
+  // Server scoring when the round synced, the device's estimate when it did not.
+  const server = lastResult?.server;
+  const stars = server?.stars ?? lastResult?.stars ?? 0;
+
   useEffect(() => {
     if (!lastResult) return;
-    const t = setTimeout(() => sound.speak(`${TITLES[lastResult.stars]} ${lastResult.stars} bituin!`), 400);
+    const t = setTimeout(() => sound.speak(`${TITLES[stars]} ${stars} bituin!`), 400);
     return () => {
       clearTimeout(t);
       sound.stop();
     };
-  }, [lastResult]);
+  }, [lastResult?.clientId]);
 
   if (!lastResult) {
     return (
@@ -34,8 +38,12 @@ export default function Result() {
     );
   }
 
+  const score = server?.score ?? lastResult.score;
+  const accuracy = server?.accuracy ?? lastResult.accuracy;
+  const newBadges = server?.newBadges ?? lastResult.newBadges;
+
   const best = progress.scores.find((x: any) => x.gameType === lastResult.gameType && x.level === lastResult.level);
-  const isNewBest = !best || lastResult.score >= best.highestScore;
+  const isNewBest = server ? server.isNewBest : !best || score >= best.highestScore;
 
   return (
     <SafeAreaView style={s.screen}>
@@ -43,25 +51,25 @@ export default function Result() {
         <Text style={s.eyebrow}>
           {gameInfo(lastResult.gameType)?.name} · {levelRule(lastResult.level)?.name}
         </Text>
-        <Text style={s.title}>{TITLES[lastResult.stars]}</Text>
-        <Stars count={lastResult.stars} size={52} />
+        <Text style={s.title}>{TITLES[stars]}</Text>
+        <Stars count={stars} size={52} />
 
         <View style={s.grid}>
           <Box value={`${lastResult.correct}/${lastResult.items}`} label="tama" />
-          <Box value={`${lastResult.accuracy}%`} label="husay" />
-          <Box value={lastResult.score} label="puntos" />
+          <Box value={`${accuracy}%`} label="husay" />
+          <Box value={score} label="puntos" />
         </View>
 
         {isNewBest ? <Text style={s.newBest}>🏆 {TEXT.newBest}</Text> : <Text style={s.prevBest}>Pinakamataas mo: {best?.highestScore} puntos</Text>}
 
-        <Text style={[s.sync, lastResult.synced ? s.syncOk : s.syncWait]}>
-          {lastResult.synced ? `✓ ${TEXT.synced}` : `⏳ ${TEXT.offline}`}
+        <Text style={[s.sync, server ? s.syncOk : s.syncWait]}>
+          {server ? `✓ ${TEXT.synced}` : `⏳ ${TEXT.offline}`}
         </Text>
 
-        {lastResult.newBadges?.length ? (
+        {newBadges.length ? (
           <View style={s.badges}>
             <Text style={s.badgeTitle}>Bagong gantimpala!</Text>
-            {lastResult.newBadges.map((b: any) => (
+            {newBadges.map((b) => (
               <Text key={b.key} style={s.badgeRow}>🏅 {b.name} — {b.description}</Text>
             ))}
           </View>

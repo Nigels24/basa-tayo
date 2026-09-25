@@ -17,8 +17,11 @@ export default function Home() {
     if (ready && !pupil) router.replace('/');
   }, [ready, pupil]);
 
+  // Refresh first, then retry anything queued; neither blocks the screen.
   useEffect(() => {
-    refresh().catch(() => {});
+    refresh()
+      .catch(() => {})
+      .finally(() => sync());
   }, []);
 
   if (!ready || !pupil) return <Loading />;
@@ -44,7 +47,7 @@ export default function Home() {
       </View>
 
       {pending > 0 ? (
-        <Pressable style={s.pendingBar} onPress={() => sync()}>
+        <Pressable style={({ pressed }) => [s.pendingBar, pressed && { opacity: 0.6 }]} onPress={() => sync()}>
           <Text style={s.pendingText}>📶 {pending} laro ang naghihintay i-sync. Pindutin kapag may internet.</Text>
         </Pressable>
       ) : null}

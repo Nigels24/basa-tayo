@@ -139,20 +139,56 @@ export const outbox = {
   /**
    * Sends everything waiting. Each round carries a clientId, so sending twice
    * never creates a duplicate on the server.
+   *
+   * Never throws: when offline (or the server refuses) the rounds stay queued
+   * and `ok` is false. Only rounds the server answered for are removed.
    */
-  async flush() {
+  async flush(): Promise<FlushResult> {
     const pending = await outbox.all();
-    if (!pending.length) return { sent: 0, results: [] as any[] };
+    if (!pending.length) return { ok: true, sent: 0, results: {} };
 
-    const res = await api.syncSessions(pending); // throws when offline — rounds stay queued
+    let res: { results: SyncResult[] };
+    try {
+      res = (await api.syncSessions(pending)) as { results: SyncResult[] };
+    } catch {
+      return { ok: false, sent: 0, results: {} };
+    }
+
+    const results: Record<string, SyncResult> = {};
+    for (const r of res?.results ?? []) results[r.clientId] = r;
+
     const d = await db();
     for (const p of pending) {
-      await d.runAsync('DELETE FROM outbox WHERE client_id = ?', p.clientId);
+      if (results[p.clientId]) await d.runAsync('DELETE FROM outbox WHERE client_id = ?', p.clientId);
     }
-    await cache.progress();
-    return { sent: pending.length, results: res.results };
+    return { ok: true, sent: Object.keys(results).length, results };
   },
 };
+
+export interface EarnedBadge {
+  key: string;
+  name: string;
+  description: string;
+}
+
+/** The server's scoring of one round (POST /sessions/sync). */
+export interface SyncResult {
+  clientId: string;
+  sessionId: number;
+  /** true when the server already had this round; then accuracy is omitted and newBadges is empty. */
+  duplicate: boolean;
+  stars: number;
+  score: number;
+  accuracy?: number;
+  isNewBest: boolean;
+  newBadges: EarnedBadge[];
+}
+
+export interface FlushResult {
+  ok: boolean;
+  sent: number;
+  results: Record<string, SyncResult>;
+}
 
 export function newClientId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

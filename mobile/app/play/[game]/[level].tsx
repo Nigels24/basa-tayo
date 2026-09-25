@@ -125,21 +125,21 @@ export default function Play() {
     };
     await outbox.add(session);
 
-    // Local result for the results screen; the API re-scores it on sync.
+    // Local estimate for the results screen; the API re-scores it on sync.
     setLastResult({
-      gameType: game,
-      level,
+      clientId: session.clientId,
+      gameType: game as GameType,
+      level: level as Level,
       correct,
       items: list.length,
       accuracy,
       stars: starsOf(accuracy),
       score: correct * POINTS_PER_CORRECT,
-      synced: false,
       newBadges: [],
     });
 
-    const sent = await sync(); // silently queues when offline
-    if (sent > 0) setLastResult((prev: any) => ({ ...(prev ?? {}), synced: true }));
+    const server = await sync(session.clientId); // silently queues when offline
+    if (server) setLastResult((prev) => (prev?.clientId === server.clientId ? { ...prev, server } : prev));
     router.replace('/result');
   };
 
