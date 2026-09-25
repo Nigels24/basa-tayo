@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Basa Tayo!",
+    "slug": "basa-tayo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "basatayo",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffc53d"
+    },
+    "android": {
+      "package": "ph.edu.jhcsc.basatayo",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#ffc53d"
+      },
+      "permissions": ["INTERNET"]
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

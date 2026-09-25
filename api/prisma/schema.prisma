@@ -1,0 +1,209 @@
+// Database schema — matches Figure 3.7 (Entity Relationship Diagram),
+// plus the session_answers table needed by the most-missed-items report.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TEACHER
+  PUPIL
+}
+
+enum GameType {
+  TITIK // Pagbigkas ng Titik
+  LARAWAN // Larawan at Salita
+  BUUIN // Buuin ang Salita
+}
+
+enum Level {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum Theme {
+  Q1 // Sarili at Pamilya
+  Q2 // Paaralan
+  Q3 // Komunidad
+  Q4 // Kapaligiran
+}
+
+/// users — teachers and pupils, separated by role (ERD: users)
+model User {
+  id           Int      @id @default(autoincrement())
+  role         Role
+  name         String
+  // teacher only
+  username     String?  @unique
+  passwordHash String?  @map("password_hash")
+  school       String?
+  // pupil only
+  loginCode    String?  @unique @map("login_code") // short pupil code
+  section      String?
+  active       Boolean  @default(true)
+  teacherId    Int?     @map("teacher_id")
+  teacher      User?    @relation("ClassRoster", fields: [teacherId], references: [id])
+  pupils       User[]   @relation("ClassRoster")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  words        Word[]
+  lessons      Lesson[]
+  sessions     GameSession[]
+  answers      SessionAnswer[]
+  scores       Score[]
+  badges       Badge[]
+
+  @@map("users")
+}
+
+/// lessons — instructional screen shown before a mini-game (ERD: lessons)
+model Lesson {
+  id             Int      @id @default(autoincrement())
+  competencyCode String   @map("competency_code")
+  title          String
+  target         String // the big letter / syllables / word on the lesson screen
+  body           String // short Filipino explanation
+  say            String? // what the "Pakinggan" button reads aloud
+  audioUrl       String?  @map("audio_url")
+  exampleWordId  Int?     @map("example_word_id")
+  exampleWord    Word?    @relation(fields: [exampleWordId], references: [id])
+  gameType       GameType @map("game_type")
+  level          Level
+  createdById    Int?     @map("created_by")
+  createdBy      User?    @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  games          Game[]
+
+  @@index([gameType, level])
+  @@map("lessons")
+}
+
+/// words — the Filipino word bank maintained by the teacher (ERD: words)
+model Word {
+  id           Int      @id @default(autoincrement())
+  filipinoWord String   @unique @map("filipino_word")
+  syllables    String[] // ["ka","ma","tis"]
+  theme        Theme
+  level        Level
+  imageUrl     String?  @map("image_url") // Cloudinary URL
+  emoji        String? // placeholder picture until a real image is uploaded
+  audioUrl     String?  @map("audio_url") // Cloudinary URL of the recording
+  active       Boolean  @default(true)
+  createdById  Int?     @map("created_by")
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  gameWords    GameWord[]
+  answers      SessionAnswer[]
+  lessons      Lesson[]
+
+  @@index([level])
+  @@map("words")
+}
+
+/// games — one row per mini-game + level (ERD: games)
+model Game {
+  id       Int      @id @default(autoincrement())
+  gameType GameType @map("game_type")
+  level    Level
+  lessonId Int?     @map("lesson_id")
+  lesson   Lesson?  @relation(fields: [lessonId], references: [id])
+
+  gameWords GameWord[]
+  sessions  GameSession[]
+  scores    Score[]
+
+  @@unique([gameType, level])
+  @@map("games")
+}
+
+/// game_words — which words are used by which mini-game (ERD: game_words)
+model GameWord {
+  id     Int  @id @default(autoincrement())
+  gameId Int  @map("game_id")
+  wordId Int  @map("word_id")
+  game   Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  word   Word @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, wordId])
+  @@map("game_words")
+}
+
+/// game_sessions — one round of play (ERD: game_sessions)
+model GameSession {
+  id           Int      @id @default(autoincrement())
+  pupilId      Int      @map("pupil_id")
+  pupil        User     @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+  gameId       Int      @map("game_id")
+  game         Game     @relation(fields: [gameId], references: [id])
+  level        Level
+  correctCount Int      @map("correct_count")
+  itemCount    Int      @map("item_count")
+  accuracy     Int // percent
+  score        Int // points
+  stars        Int
+  playedAt     DateTime @map("played_at")
+  syncedAt     DateTime @default(now()) @map("synced_at")
+  clientId     String   @unique @map("client_id") // uuid made on the device, keeps sync idempotent
+
+  answers SessionAnswer[]
+
+  @@index([pupilId, playedAt])
+  @@map("game_sessions")
+}
+
+/// session_answers — every single answer, so the teacher can see most-missed items
+model SessionAnswer {
+  id          Int         @id @default(autoincrement())
+  sessionId   Int         @map("session_id")
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  pupilId     Int         @map("pupil_id")
+  pupil       User        @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+  wordId      Int?        @map("word_id")
+  word        Word?       @relation(fields: [wordId], references: [id])
+  prompt      String // what was asked, e.g. "B — bahay" or "kamatis"
+  givenAnswer String      @map("given_answer")
+  isCorrect   Boolean     @map("is_correct")
+
+  @@index([pupilId, isCorrect])
+  @@map("session_answers")
+}
+
+/// scores — highest score per pupil, mini-game and level (ERD: scores)
+model Score {
+  id           Int      @id @default(autoincrement())
+  pupilId      Int      @map("pupil_id")
+  pupil        User     @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+  gameId       Int      @map("game_id")
+  game         Game     @relation(fields: [gameId], references: [id])
+  level        Level
+  highestScore Int      @map("highest_score")
+  accuracy     Int
+  stars        Int
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([pupilId, gameId, level])
+  @@map("scores")
+}
+
+/// badges — achievements a pupil has earned (ERD: badges)
+model Badge {
+  id       Int      @id @default(autoincrement())
+  pupilId  Int      @map("pupil_id")
+  pupil    User     @relation(fields: [pupilId], references: [id], onDelete: Cascade)
+  badgeKey String   @map("badge_key") // matches BADGES in src/common/game-config.ts
+  name     String
+  earnedAt DateTime @default(now()) @map("earned_at")
+
+  @@unique([pupilId, badgeKey])
+  @@map("badges")
+}
