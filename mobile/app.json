@@ -17,9 +17,16 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffc53d"
       },
-      "permissions": ["INTERNET"]
+      "permissions": [
+        "INTERNET"
+      ]
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-audio",
+      "expo-status-bar"
+    ],
     "experiments": {
       "typedRoutes": false
     }
