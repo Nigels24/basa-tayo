@@ -34,7 +34,9 @@ export default function WordsPage() {
     api.words(query ? `?${query}` : '').then(setWords).catch((e) => setError(e.message));
   };
 
-  useEffect(load, [q, level, gameType]);
+  useEffect(() => {
+    load();
+  }, [q, level, gameType]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

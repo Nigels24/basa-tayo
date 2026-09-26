@@ -10,7 +10,9 @@ export default function PupilsPage() {
   const [error, setError] = useState('');
 
   const load = () => api.pupils().then(setPupils).catch((e) => setError(e.message));
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function openNew() {
     const { code } = await api.newCode();
