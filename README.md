@@ -54,15 +54,45 @@ computer must be on the same Wi-Fi.
 
 ### APK for the defense
 
+The build runs on Expo's servers (EAS). `mobile/eas.json` has three profiles:
+
+| Profile | Output | Use it for |
+|---|---|---|
+| `preview` | installable `.apk` | **The defense** and user acceptance testing. Sideload it on any Android phone. |
+| `production` | `.aab` app bundle | Only if the app ever goes to the Play Store. It cannot be installed directly. |
+| `development` | dev-client `.apk` | Debugging native code. Needs `npx expo install expo-dev-client` first; Expo Go covers everyday work. |
+
+**API URL.** `EXPO_PUBLIC_API_URL` is baked into the APK when it is built. At the defense the phone
+will not be on your Wi-Fi, so the APK must point at the **deployed** API (Render/Railway), an
+`https://` address, never a LAN IP or `localhost`. Android release builds also block plain `http`.
+`mobile/.env` is gitignored, and EAS leaves gitignored files out of the upload, so the URL is set
+as an EAS environment variable for the `preview` profile instead (step 4). Your local `.env` keeps
+the LAN IP for Expo Go.
+
+First build, in order:
+
 ```bash
 cd mobile
-npm install -g eas-cli
-eas login
-eas build:configure
-eas build -p android --profile preview      # produces an installable .apk
+npm install -g eas-cli                        # 1. install the EAS command-line tool
+eas login                                     # 2. sign in to your expo.dev account
+eas init                                      # 3. creates the project on expo.dev and writes its projectId into app.json
+eas env:create --environment preview --name EXPO_PUBLIC_API_URL \
+  --value https://YOUR-API.onrender.com/api --visibility plaintext   # 4. the deployed API URL
+eas build -p android --profile preview        # 5. build the APK
 ```
 
-Do this in the first week. The first build needs credential setup and queues for a while.
+- On the first build EAS asks **"Generate a new Android Keystore?"** Answer **yes**. EAS stores
+  the keystore on expo.dev, and every later build signs with it so updates install over the old app.
+  Don't delete it: a new keystore means the APK has to be uninstalled before the new one installs.
+- Commit the `app.json` change that `eas init` makes (the `extra.eas.projectId` and `owner` fields).
+- When the build finishes, the terminal prints a link and a QR code. Open it on the phone,
+  download the `.apk`, and allow "Install unknown apps" when Android asks.
+- Before the defense, raise `android.versionCode` in `app.json` (1 → 2 → …) for each APK you
+  hand out, so it installs as an update.
+- Later builds need only step 5. If the API URL changes, update it with
+  `eas env:update --environment preview --variable-name EXPO_PUBLIC_API_URL`, then rebuild.
+
+Do this in the first week. The first build queues for a while on the free plan.
 
 ## What maps to what in the manuscript
 

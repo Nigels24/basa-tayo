@@ -42,11 +42,6 @@ The phone needs the computer's LAN address, not `localhost`:
 
 ## Building the APK for the defense
 
-```bash
-npm install -g eas-cli
-eas login
-eas build:configure
-eas build -p android --profile preview
-```
-
-Do this during week one. The first build has to create credentials and sits in a queue.
+See "APK for the defense" in the root `README.md`: the commands in order, what each profile
+in `eas.json` is for, and why the APK's API URL is set with `eas env:create` and not in `.env`.
+Don't run `eas build:configure`, because `eas.json` is already in this folder.

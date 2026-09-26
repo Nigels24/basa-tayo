@@ -5,7 +5,8 @@
  *             run with no internet.
  *  outbox   — finished rounds waiting to be sent to the API, tagged with the
  *             pupil who played them so a shared tablet never mixes pupils up.
- *  progress — the pupil's stars and highest scores, so the home screen works offline.
+ *  progress — each pupil's stars, highest scores and badges under progress:<pupilId>,
+ *             so the home screen works offline without showing another pupil's numbers.
  */
 import * as SQLite from 'expo-sqlite';
 import { api } from './api';
@@ -31,6 +32,9 @@ function db() {
       if (!cols.some((c) => c.name === 'pupil_id')) {
         await d.execAsync('ALTER TABLE outbox ADD COLUMN pupil_id INTEGER');
       }
+      // Installs from before per-pupil progress kept one shared 'progress' entry;
+      // we can't tell whose it was, so drop it rather than show it to the next pupil.
+      await d.runAsync("DELETE FROM kv WHERE key = 'progress'");
       return d;
     });
   }
@@ -100,18 +104,30 @@ export const cache = {
 
   bundle: () => get<Bundle>('bundle'),
 
-  async progress() {
+  /**
+   * The logged-in pupil's progress: fresh from the API when online, else that
+   * pupil's own cached copy, else zeros. Never another pupil's entry.
+   */
+  async progress(): Promise<Progress> {
+    const pupilId = api.currentPupil()?.id;
+    if (pupilId == null) return emptyProgress();
+    const key = `progress:${pupilId}`;
     try {
-      const p = await api.progress();
-      await put('progress', p);
+      const p = (await api.progress()) as Progress;
+      await put(key, p);
       return p;
     } catch {
-      return (await get<any>('progress')) ?? { scores: [], badges: [] };
+      return (await get<Progress>(key)) ?? emptyProgress();
     }
   },
-
-  saveProgress: (p: unknown) => put('progress', p),
 };
+
+export interface Progress {
+  scores: any[];
+  badges: any[];
+}
+
+export const emptyProgress = (): Progress => ({ scores: [], badges: [] });
 
 export interface PendingSession {
   clientId: string;

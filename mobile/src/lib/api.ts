@@ -1,5 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/**
+ * EXPO_PUBLIC_API_URL is baked into the app when it is bundled, not read on the phone.
+ * - Expo Go: .env holds the computer's LAN IP (the phone shares its Wi-Fi).
+ * - APK (eas build): EAS does not upload the gitignored .env, so the deployed
+ *   https API URL must be set as an EAS environment variable for the profile
+ *   (see README, "APK for the defense"). Never a LAN IP or localhost: the phone
+ *   won't be on this Wi-Fi, and release builds block plain http.
+ * The fallback below only works on the developer's Wi-Fi.
+ */
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.10:3000/api';
 const TOKEN_KEY = 'basatayo.token';
 const PUPIL_KEY = 'basatayo.pupil';

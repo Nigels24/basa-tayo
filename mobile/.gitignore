@@ -5,3 +5,16 @@ dist/
 .next/
 *.log
 .DS_Store
+
+# Native folders from `expo prebuild`; EAS generates them on its servers
+ios/
+android/
+
+# Local build output and signing files (EAS keeps the keystore)
+build/
+*.apk
+*.aab
+*.ipa
+*.jks
+*.keystore
+credentials.json
