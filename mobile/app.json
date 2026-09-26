@@ -18,7 +18,11 @@
         "backgroundColor": "#ffc53d"
       },
       "permissions": [
-        "INTERNET"
+        "INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "plugins": [
@@ -29,6 +33,13 @@
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e42ede15-3424-41da-a09d-d065803684c9"
+      }
+    },
+    "owner": "jsipe072"
   }
 }
