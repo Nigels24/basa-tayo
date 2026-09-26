@@ -1,12 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { GameType, Level } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common';
+import { GameType, Level, Prisma } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { ValidationError, validate } from 'class-validator';
 import { PrismaService } from '../prisma.service';
 import { accuracyOf, pointsOf, starsOf } from '../common/scoring';
 import { BADGES, LEVELS } from '../common/game-config';
-import { SyncSessionsDto, SyncSessionDto } from './dto';
+import { SyncOutcome, SyncSessionsDto, SyncSessionDto } from './dto';
 
 @Injectable()
 export class SessionsService {
+  private readonly log = new Logger(SessionsService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -17,26 +21,60 @@ export class SessionsService {
    *
    * clientId makes this idempotent — re-sending a round after a dropped
    * connection does not create a duplicate.
+   *
+   * Each session is handled on its own and gets its own outcome, so one bad
+   * round never blocks the others:
+   *   ok        — saved and scored now
+   *   duplicate — already stored; the stored scoring is returned
+   *   rejected  — can never be saved (invalid, unknown game or level); the device drops it
+   *   failed    — unexpected server error; the device keeps it and retries later
    */
   async sync(pupilId: number, dto: SyncSessionsDto) {
-    const results = [];
-    for (const s of dto.sessions) {
-      results.push(await this.saveOne(pupilId, s));
+    const results: SyncOutcome[] = [];
+    for (const raw of dto.sessions) {
+      results.push(await this.handleOne(pupilId, raw));
     }
     return { results };
   }
 
-  private async saveOne(pupilId: number, s: SyncSessionDto) {
+  private async handleOne(pupilId: number, raw: unknown): Promise<SyncOutcome> {
+    const rawId = (raw as { clientId?: unknown } | null)?.clientId;
+    const clientId = typeof rawId === 'string' ? rawId : '';
+
+    const s = plainToInstance(SyncSessionDto, raw ?? {});
+    const errors = await validate(s, { whitelist: true });
+    if (errors.length) {
+      return { clientId, status: 'rejected', reason: firstMessage(errors) };
+    }
+
+    try {
+      return await this.saveOne(pupilId, s);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        // Same clientId saved by a concurrent request — answer as a duplicate.
+        if (e.code === 'P2002') {
+          const existing = await this.prisma.gameSession.findUnique({ where: { clientId: s.clientId } });
+          if (existing?.pupilId === pupilId) return this.duplicate(existing);
+        }
+        // A referenced row (e.g. a wordId) does not exist; retrying will not help.
+        if (e.code === 'P2003') return { clientId, status: 'rejected', reason: 'Unknown word in answers' };
+      }
+      this.log.error(`sync failed for ${clientId}`, e instanceof Error ? e.stack : String(e));
+      return { clientId, status: 'failed', reason: 'Server error, try again later' };
+    }
+  }
+
+  private async saveOne(pupilId: number, s: SyncSessionDto): Promise<SyncOutcome> {
     const existing = await this.prisma.gameSession.findUnique({ where: { clientId: s.clientId } });
     if (existing) {
-      return { clientId: s.clientId, sessionId: existing.id, duplicate: true, stars: existing.stars, score: existing.score, isNewBest: false, newBadges: [] };
+      if (existing.pupilId !== pupilId) return { clientId: s.clientId, status: 'rejected', reason: 'clientId belongs to another pupil' };
+      return this.duplicate(existing);
     }
 
     const game = await this.prisma.game.findUnique({
       where: { gameType_level: { gameType: s.gameType as GameType, level: s.level as Level } },
     });
-    if (!game) throw new NotFoundException('Unknown game or level');
-
+    if (!game) return { clientId: s.clientId, status: 'rejected', reason: 'Unknown game or level' };
     const itemCount = s.answers.length;
     const correctCount = s.answers.filter((a) => a.isCorrect).length;
     const accuracy = accuracyOf(correctCount, itemCount);
@@ -70,7 +108,21 @@ export class SessionsService {
     const isNewBest = await this.updateHighestScore(pupilId, game.id, s.level as Level, score, accuracy, stars);
     const newBadges = await this.checkBadges(pupilId, { gameType: s.gameType as GameType, level: s.level as Level, accuracy, stars });
 
-    return { clientId: s.clientId, sessionId: session.id, duplicate: false, stars, score, accuracy, isNewBest, newBadges };
+    return { clientId: s.clientId, status: 'ok', sessionId: session.id, stars, score, accuracy, isNewBest, newBadges };
+  }
+
+  /** A round the server already stored: its stored scoring, never a new best or new badges. */
+  private duplicate(existing: { id: number; clientId: string; stars: number; score: number; accuracy: number }): SyncOutcome {
+    return {
+      clientId: existing.clientId,
+      status: 'duplicate',
+      sessionId: existing.id,
+      stars: existing.stars,
+      score: existing.score,
+      accuracy: existing.accuracy,
+      isNewBest: false,
+      newBadges: [],
+    };
   }
 
   /** Highest-score system: keep the best result per pupil, mini-game and level. */
@@ -119,4 +171,13 @@ export class SessionsService {
     }
     return earned;
   }
+}
+
+/** First human-readable validation message, including nested answer errors. */
+function firstMessage(errors: ValidationError[]): string {
+  for (const e of errors) {
+    if (e.constraints) return Object.values(e.constraints)[0];
+    if (e.children?.length) return firstMessage(e.children);
+  }
+  return 'Invalid session';
 }

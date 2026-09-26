@@ -3,7 +3,8 @@
  *
  *  content  — the downloaded lessons, words and game assignment, so the games
  *             run with no internet.
- *  outbox   — finished rounds waiting to be sent to the API.
+ *  outbox   — finished rounds waiting to be sent to the API, tagged with the
+ *             pupil who played them so a shared tablet never mixes pupils up.
  *  progress — the pupil's stars and highest scores, so the home screen works offline.
  */
 import * as SQLite from 'expo-sqlite';
@@ -20,9 +21,16 @@ function db() {
         CREATE TABLE IF NOT EXISTS outbox (
           client_id TEXT PRIMARY KEY NOT NULL,
           payload   TEXT NOT NULL,
-          played_at TEXT NOT NULL
+          played_at TEXT NOT NULL,
+          pupil_id  INTEGER
         );
       `);
+      // Installs from before pupil_id: add the column; old rows stay NULL and
+      // are sent for whoever is logged in, since they predate the tagging.
+      const cols = await d.getAllAsync<{ name: string }>('PRAGMA table_info(outbox)');
+      if (!cols.some((c) => c.name === 'pupil_id')) {
+        await d.execAsync('ALTER TABLE outbox ADD COLUMN pupil_id INTEGER');
+      }
       return d;
     });
   }
@@ -114,52 +122,77 @@ export interface PendingSession {
 }
 
 export const outbox = {
+  /** Queues a round for the logged-in pupil. */
   async add(session: PendingSession) {
     const d = await db();
     await d.runAsync(
-      'INSERT OR REPLACE INTO outbox (client_id, payload, played_at) VALUES (?, ?, ?)',
+      'INSERT OR REPLACE INTO outbox (client_id, payload, played_at, pupil_id) VALUES (?, ?, ?, ?)',
       session.clientId,
       JSON.stringify(session),
       session.playedAt,
+      api.currentPupil()?.id ?? null,
     );
   },
 
+  /** Rounds waiting for the logged-in pupil (plus untagged rounds from older installs). */
   async count() {
+    const pupilId = api.currentPupil()?.id;
+    if (pupilId == null) return 0;
     const d = await db();
-    const row = await d.getFirstAsync<{ n: number }>('SELECT COUNT(*) as n FROM outbox');
+    const row = await d.getFirstAsync<{ n: number }>(
+      'SELECT COUNT(*) as n FROM outbox WHERE pupil_id = ? OR pupil_id IS NULL',
+      pupilId,
+    );
     return row?.n ?? 0;
   },
 
   async all(): Promise<PendingSession[]> {
+    const pupilId = api.currentPupil()?.id;
+    if (pupilId == null) return [];
     const d = await db();
-    const rows = await d.getAllAsync<{ payload: string }>('SELECT payload FROM outbox ORDER BY played_at ASC');
+    const rows = await d.getAllAsync<{ payload: string }>(
+      'SELECT payload FROM outbox WHERE pupil_id = ? OR pupil_id IS NULL ORDER BY played_at ASC',
+      pupilId,
+    );
     return rows.map((r) => JSON.parse(r.payload));
   },
 
   /**
-   * Sends everything waiting. Each round carries a clientId, so sending twice
+   * Sends the logged-in pupil's waiting rounds; other pupils' rounds stay
+   * queued until they log in. Each round carries a clientId, so sending twice
    * never creates a duplicate on the server.
    *
-   * Never throws: when offline (or the server refuses) the rounds stay queued
-   * and `ok` is false. Only rounds the server answered for are removed.
+   * Never throws: when the request fails (offline, timeout) the rounds stay
+   * queued and `ok` is false. A round leaves the queue when the server says
+   * ok, duplicate or rejected (a rejected round can never succeed); a round
+   * the server failed on stays for the next try.
    */
   async flush(): Promise<FlushResult> {
     const pending = await outbox.all();
     if (!pending.length) return { ok: true, sent: 0, results: {} };
 
-    let res: { results: SyncResult[] };
+    let res: { results: SyncOutcome[] };
     try {
-      res = (await api.syncSessions(pending)) as { results: SyncResult[] };
+      res = (await api.syncSessions(pending)) as { results: SyncOutcome[] };
     } catch {
       return { ok: false, sent: 0, results: {} };
     }
 
     const results: Record<string, SyncResult> = {};
-    for (const r of res?.results ?? []) results[r.clientId] = r;
+    const done = new Set<string>();
+    for (const r of res?.results ?? []) {
+      if (r.status === 'ok' || r.status === 'duplicate') {
+        results[r.clientId] = r;
+        done.add(r.clientId);
+      } else if (r.status === 'rejected') {
+        console.warn(`[outbox] round ${r.clientId} rejected by server: ${r.reason}`);
+        done.add(r.clientId);
+      }
+    }
 
     const d = await db();
     for (const p of pending) {
-      if (results[p.clientId]) await d.runAsync('DELETE FROM outbox WHERE client_id = ?', p.clientId);
+      if (done.has(p.clientId)) await d.runAsync('DELETE FROM outbox WHERE client_id = ?', p.clientId);
     }
     return { ok: true, sent: Object.keys(results).length, results };
   },
@@ -171,18 +204,26 @@ export interface EarnedBadge {
   description: string;
 }
 
-/** The server's scoring of one round (POST /sessions/sync). */
+/**
+ * The server's scoring of one round (POST /sessions/sync). A duplicate is a
+ * round the server already stored: its stored scoring, isNewBest false and no
+ * new badges.
+ */
 export interface SyncResult {
   clientId: string;
+  status: 'ok' | 'duplicate';
   sessionId: number;
-  /** true when the server already had this round; then accuracy is omitted and newBadges is empty. */
-  duplicate: boolean;
   stars: number;
   score: number;
-  accuracy?: number;
+  accuracy: number;
   isNewBest: boolean;
   newBadges: EarnedBadge[];
 }
+
+/** One entry of the sync response; mirrors SyncOutcome in api/src/sessions/dto.ts. */
+type SyncOutcome =
+  | SyncResult
+  | { clientId: string; status: 'rejected' | 'failed'; reason: string };
 
 export interface FlushResult {
   ok: boolean;

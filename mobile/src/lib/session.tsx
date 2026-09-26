@@ -82,11 +82,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const p = await api.loginPupil(code);
     setPupil(p);
     await refresh();
+    sync(); // send this pupil's rounds queued from an earlier offline login
   };
 
+  /** This pupil's queued rounds stay on the device until they log in again. */
   const logout = async () => {
     await api.logout();
     setPupil(null);
+    setPending(0);
+    setLastResult(null);
   };
 
   /**

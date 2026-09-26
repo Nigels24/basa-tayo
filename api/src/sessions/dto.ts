@@ -19,8 +19,27 @@ export class SyncSessionDto {
   answers: SyncAnswerDto[];
 }
 
+/**
+ * Only the batch itself is validated here. Each session is validated on its
+ * own in SessionsService, so one malformed round is rejected alone instead of
+ * failing the whole request with a 400.
+ */
 export class SyncSessionsDto {
   @IsArray() @ArrayNotEmpty() @ArrayMaxSize(100)
-  @ValidateNested({ each: true }) @Type(() => SyncSessionDto)
-  sessions: SyncSessionDto[];
+  sessions: unknown[];
 }
+
+/** Per-session outcome returned by POST /sessions/sync (always HTTP 200). */
+export type SyncOutcome =
+  | {
+      clientId: string;
+      status: 'ok' | 'duplicate';
+      sessionId: number;
+      stars: number;
+      score: number;
+      accuracy: number;
+      isNewBest: boolean;
+      newBadges: { key: string; name: string; description: string }[];
+    }
+  | { clientId: string; status: 'rejected'; reason: string }
+  | { clientId: string; status: 'failed'; reason: string };
