@@ -2,7 +2,7 @@
  * Lesson screen — shown before EVERY round (Objective 1).
  * The only route into the game goes through here.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,13 @@ export default function LessonScreen() {
   const { game, level } = useLocalSearchParams<{ game: GameType; level: Level }>();
   const router = useRouter();
   const { bundle } = useSession();
+  // A double tap must not start two rounds or go back two screens.
+  const leaving = useRef(false);
+  const leave = (go: () => void) => {
+    if (leaving.current) return;
+    leaving.current = true;
+    go();
+  };
 
   const gameRow = bundle?.games.find((g) => g.gameType === game && g.level === level);
   const lesson =
@@ -39,7 +46,7 @@ export default function LessonScreen() {
   return (
     <SafeAreaView style={s.screen}>
       <View style={s.top}>
-        <Pressable style={s.back} onPress={() => router.back()}>
+        <Pressable style={s.back} onPress={() => leave(() => router.back())}>
           <Text style={s.backText}>‹</Text>
         </Pressable>
         <Text style={s.title}>{TEXT.lesson}</Text>
@@ -69,7 +76,7 @@ export default function LessonScreen() {
 
         {lesson ? <Text style={s.comp}>Competency: {lesson.competencyCode}</Text> : null}
 
-        <BigButton label={`▶  ${TEXT.start}`} onPress={() => router.replace(`/play/${game}/${level}`)} />
+        <BigButton label={`▶  ${TEXT.start}`} onPress={() => leave(() => router.replace(`/play/${game}/${level}`))} />
       </ScrollView>
     </SafeAreaView>
   );

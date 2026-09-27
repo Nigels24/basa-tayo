@@ -1,5 +1,5 @@
 /** Results — stars, score, highest score and sync status. */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,13 @@ const TITLES = ['Subukan muli!', 'Magaling!', 'Napakagaling!', 'Kahanga-hanga!']
 export default function Result() {
   const { lastResult, progress } = useSession();
   const router = useRouter();
+  // A double tap must not navigate twice.
+  const leaving = useRef(false);
+  const leave = (to: string) => {
+    if (leaving.current) return;
+    leaving.current = true;
+    router.replace(to);
+  };
 
   // Server scoring when the round synced, the device's estimate when it did not.
   const server = lastResult?.server;
@@ -32,7 +39,7 @@ export default function Result() {
     return (
       <SafeAreaView style={s.screen}>
         <View style={{ padding: 20 }}>
-          <BigButton label={TEXT.backHome} onPress={() => router.replace('/home')} />
+          <BigButton label={TEXT.backHome} onPress={() => leave('/home')} />
         </View>
       </SafeAreaView>
     );
@@ -76,8 +83,8 @@ export default function Result() {
         ) : null}
 
         <View style={{ gap: 12, width: '100%', marginTop: 8 }}>
-          <BigButton label={`↻  ${TEXT.playAgain}`} onPress={() => router.replace(`/lesson/${lastResult.gameType}/${lastResult.level}`)} />
-          <BigButton label={TEXT.backHome} onPress={() => router.replace('/home')} color="#fff" shadow={colors.shadow} />
+          <BigButton label={`↻  ${TEXT.playAgain}`} onPress={() => leave(`/lesson/${lastResult.gameType}/${lastResult.level}`)} />
+          <BigButton label={TEXT.backHome} onPress={() => leave('/home')} color="#fff" shadow={colors.shadow} />
         </View>
       </ScrollView>
     </SafeAreaView>

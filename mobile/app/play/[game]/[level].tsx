@@ -32,6 +32,13 @@ export default function Play() {
 
   const items = useMemo(() => (bundle ? buildRound(bundle, game as GameType, level as Level) : []), [bundle, game, level]);
   const answers = useRef<Answer[]>([]);
+  // One id per round, made when the round starts, so however often "Tapos na"
+  // fires the outbox and the server see the same round.
+  const [clientId] = useState(newClientId);
+  // Refs, not state: a second tap can arrive before React re-renders.
+  const answered = useRef(false);
+  const finishing = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   const [index, setIndex] = useState(0);
   const [built, setBuilt] = useState<{ s: string; k: number }[]>([]);
@@ -64,12 +71,13 @@ export default function Play() {
 
   const replay = () => {
     if (!canReplay || feedback) return;
-    if (lv.audioReplays >= 0) setReplays((r) => r - 1);
+    if (lv.audioReplays >= 0) setReplays((r) => Math.max(0, r - 1));
     sound.playWord(item.word);
   };
 
   const answer = (given: string) => {
-    if (feedback) return;
+    if (feedback || answered.current) return;
+    answered.current = true;
     const isCorrect = game === 'BUUIN' ? given === item.answer : given === item.answer;
     answers.current.push({ wordId: item.word.id, prompt: item.prompt, given, isCorrect });
 
@@ -100,8 +108,10 @@ export default function Play() {
   };
 
   const next = async () => {
+    if (finishing.current) return;
     sound.stop();
     if (index + 1 < items.length) {
+      answered.current = false;
       setIndex(index + 1);
       setBuilt([]);
       setReplays(Math.max(0, lv.audioReplays));
@@ -112,18 +122,29 @@ export default function Play() {
   };
 
   const finish = async () => {
+    if (finishing.current) return;
+    finishing.current = true; // before any await, so repeated taps are no-ops
+    setBusy(true);
+
     const list = answers.current;
     const correct = list.filter((a) => a.isCorrect).length;
     const accuracy = Math.round((correct / list.length) * 100);
 
     const session = {
-      clientId: newClientId(),
+      clientId,
       gameType: game as string,
       level: level as string,
       playedAt: new Date().toISOString(),
       answers: list,
     };
-    await outbox.add(session);
+    try {
+      await outbox.add(session);
+    } catch (e) {
+      // Not queued: let the pupil tap again. Same clientId, so a retry is still one round.
+      finishing.current = false;
+      setBusy(false);
+      throw e;
+    }
 
     // Local estimate for the results screen; the API re-scores it on sync.
     setLastResult({
@@ -246,6 +267,7 @@ export default function Play() {
           <BigButton
             label={index + 1 === items.length ? TEXT.finish : TEXT.next}
             onPress={next}
+            disabled={busy}
             color={feedback.correct ? colors.green : colors.bad}
             shadow={feedback.correct ? colors.greenDeep : '#a33131'}
           />

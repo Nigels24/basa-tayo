@@ -138,11 +138,14 @@ export interface PendingSession {
 }
 
 export const outbox = {
-  /** Queues a round for the logged-in pupil. */
+  /**
+   * Queues a round for the logged-in pupil. client_id is the primary key, so
+   * queuing the same round again is a no-op and never overwrites the first copy.
+   */
   async add(session: PendingSession) {
     const d = await db();
     await d.runAsync(
-      'INSERT OR REPLACE INTO outbox (client_id, payload, played_at, pupil_id) VALUES (?, ?, ?, ?)',
+      'INSERT OR IGNORE INTO outbox (client_id, payload, played_at, pupil_id) VALUES (?, ?, ?, ?)',
       session.clientId,
       JSON.stringify(session),
       session.playedAt,
