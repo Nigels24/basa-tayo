@@ -67,7 +67,8 @@ export function buildRound(bundle: Bundle, gameType: GameType, level: Level): It
         answer,
         useLast,
         choices: shuffle([answer, ...others]),
-        prompt: `${answer.toUpperCase()} — ${w.word}`,
+        // Advanced asks for the ending sound (PA-4); say so, or "W — araw" reads as a wrong pairing.
+        prompt: useLast ? `${w.word.slice(0, -answer.length)}${answer.toUpperCase()} (dulo)` : `${answer.toUpperCase()} — ${w.word}`,
         question: useLast ? 'Anong titik ang nasa DULO ng salita?' : 'Anong titik ang SIMULA ng salita?',
       };
     }
