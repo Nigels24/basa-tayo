@@ -260,7 +260,7 @@ export default function Play() {
               <Text style={s.answerText}>
                 {game === 'TITIK' ? showLetter(item.answer) : (item.syllables ?? [item.answer]).join('·')}
               </Text>
-              <Text style={{ fontSize: 22 }}>🔊</Text>
+              <Text style={{ fontSize: 22, color: colors.ink }}>🔊</Text>
             </Pressable>
           ) : null}
 
@@ -312,7 +312,7 @@ const s = StyleSheet.create({
   fbGood: { backgroundColor: colors.goodSoft },
   fbBad: { backgroundColor: colors.badSoft },
   fbHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  fbText: { fontSize: 22, fontWeight: '800', flex: 1 },
+  fbText: { fontSize: 22, fontWeight: '800', flex: 1, color: colors.ink },
   points: { fontSize: 16, fontWeight: '800', color: colors.good },
   answerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   answerText: { flex: 1, fontSize: 22, fontWeight: '700', color: colors.ink },

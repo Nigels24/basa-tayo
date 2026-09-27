@@ -69,7 +69,7 @@ const s = StyleSheet.create({
   section: { fontSize: 18, fontWeight: '800', color: colors.ink },
   card: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: radius.lg, padding: 18, borderBottomWidth: 4, borderBottomColor: colors.shadow, gap: 12 },
   levelName: { fontSize: 22, fontWeight: '800', color: colors.ink },
-  levelFil: { fontSize: 14, fontWeight: '800' },
+  levelFil: { fontSize: 14, fontWeight: '800', color: colors.ink2 },
   pips: { flexDirection: 'row', gap: 4, marginTop: 8 },
   pip: { width: 18, height: 8, borderRadius: 4, backgroundColor: '#dfe6ef' },
   meta: { fontSize: 12, color: colors.ink2, fontWeight: '600' },

@@ -4,11 +4,12 @@ import { colors, radius } from '../theme';
 import type { CachedWord } from '../lib/db';
 
 /** Big chunky button — the main touch target for six-year-olds. */
-export function BigButton({ label, onPress, color = colors.green, shadow = colors.greenDeep, disabled, style }: {
+export function BigButton({ label, onPress, color = colors.green, shadow = colors.greenDeep, labelColor = '#fff', disabled, style }: {
   label: string;
   onPress: () => void;
   color?: string;
   shadow?: string;
+  labelColor?: string;
   disabled?: boolean;
   style?: ViewStyle;
 }) {
@@ -23,7 +24,7 @@ export function BigButton({ label, onPress, color = colors.green, shadow = color
         style,
       ]}
     >
-      <Text style={s.bigLabel}>{label}</Text>
+      <Text style={[s.bigLabel, { color: disabled ? '#fff' : labelColor }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -34,14 +35,14 @@ export function Picture({ word, size = 110 }: { word?: Pick<CachedWord, 'emoji' 
   if (word.imageUrl) {
     return <Image source={{ uri: word.imageUrl }} style={{ width: size, height: size, borderRadius: radius.sm }} resizeMode="contain" accessibilityLabel={word.word} />;
   }
-  return <Text style={{ fontSize: size * 0.8, lineHeight: size * 1.05 }} accessibilityLabel={word.word}>{word.emoji ?? '❓'}</Text>;
+  return <Text style={{ fontSize: size * 0.8, lineHeight: size * 1.05, color: colors.ink }} accessibilityLabel={word.word}>{word.emoji ?? '❓'}</Text>;
 }
 
 export function Stars({ count, size = 22 }: { count: number; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', gap: 2 }} accessibilityLabel={`${count} sa 3 bituin`}>
       {[0, 1, 2].map((i) => (
-        <Text key={i} style={{ fontSize: size, opacity: i < count ? 1 : 0.25 }}>
+        <Text key={i} style={{ fontSize: size, opacity: i < count ? 1 : 0.25, color: colors.ink }}>
           ⭐
         </Text>
       ))}

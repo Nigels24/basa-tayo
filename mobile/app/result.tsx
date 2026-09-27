@@ -84,7 +84,7 @@ export default function Result() {
 
         <View style={{ gap: 12, width: '100%', marginTop: 8 }}>
           <BigButton label={`↻  ${TEXT.playAgain}`} onPress={() => leave(`/lesson/${lastResult.gameType}/${lastResult.level}`)} />
-          <BigButton label={TEXT.backHome} onPress={() => leave('/home')} color="#fff" shadow={colors.shadow} />
+          <BigButton label={TEXT.backHome} onPress={() => leave('/home')} color="#fff" shadow={colors.shadow} labelColor={colors.ink} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -111,7 +111,7 @@ const s = StyleSheet.create({
   boxLabel: { fontSize: 12, fontWeight: '700', color: colors.ink2 },
   newBest: { backgroundColor: colors.mango, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 8, fontWeight: '800', color: colors.ink },
   prevBest: { fontWeight: '700', color: colors.ink3 },
-  sync: { fontSize: 13, fontWeight: '700', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, overflow: 'hidden' },
+  sync: { fontSize: 13, color: colors.ink, fontWeight: '700', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, overflow: 'hidden' },
   syncOk: { backgroundColor: colors.goodSoft, color: colors.good },
   syncWait: { backgroundColor: '#fdf3dc', color: '#8a5a10' },
   badges: { width: '100%', backgroundColor: '#fff', borderRadius: radius.md, padding: 14, gap: 6 },
