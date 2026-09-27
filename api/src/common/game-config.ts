@@ -41,18 +41,27 @@ export const GAMES: { id: GameType; name: string; english: string; skill: string
 export const MARUNGKO = ['m', 's', 'a', 'i', 'o', 'b', 'e', 'u', 't', 'k', 'l', 'y', 'n', 'g', 'p', 'r', 'd', 'h', 'w'];
 export const BEGINNER_LETTER_COUNT = 11;
 
-/** Table 1 — replace the codes with the official MATATAG curriculum guide codes */
+const QUARTERS = ['I', 'II', 'III', 'IV'];
+
+/** One entry per quarter: RL1<subdomain>-<quarter>-<number> */
+const perQuarter = (subdomain: string, n: number, game: string, text: string) =>
+  QUARTERS.map((q) => ({ code: `RL1${subdomain}-${q}-${n}`, game, text }));
+
+/**
+ * Table 1 — DepEd MATATAG Curriculum, Reading and Literacy, Grade 1.
+ * RL1PA codes exist in Quarter 1 only; RL1PWS and RL1VWK exist in all four quarters.
+ */
 export const COMPETENCIES = [
-  { code: 'PA-1', game: 'TITIK', text: 'Identify the letters in L1' },
-  { code: 'PA-2', game: 'TITIK', text: 'Produce the sound of the letters in L1' },
-  { code: 'PA-3', game: 'TITIK', text: 'Identify initial sounds (vowels, consonants, semi-vowels)' },
-  { code: 'PA-4', game: 'TITIK', text: 'Isolate sounds in a word (beginning and ending)' },
-  { code: 'VW-1', game: 'LARAWAN', text: 'Use vocabulary referring to oneself, family, school, community, environment' },
-  { code: 'VW-2', game: 'LARAWAN', text: 'Read high-frequency words accurately for meaning' },
-  { code: 'PW-1', game: 'LARAWAN', text: 'Sound out words accurately' },
-  { code: 'PA-5', game: 'BUUIN', text: 'Segment a two- to three-syllable word into its syllabic parts' },
-  { code: 'PA-6', game: 'BUUIN', text: 'Substitute individual sounds in simple words to make new words' },
-  { code: 'CC-1', game: 'BUUIN', text: 'Write words legibly and correctly' },
+  ...perQuarter('PWS', 2, 'TITIK', 'Identify the letters in L1.'),
+  ...perQuarter('PWS', 1, 'TITIK', 'Produce the sound of the letters of L1.'),
+  { code: 'RL1PA-I-5', game: 'TITIK', text: 'Identify initial sounds (vowels, consonants, and semi-vowels, if any).' },
+  ...perQuarter('PWS', 3, 'TITIK', 'Isolate sounds (consonants and vowels) in a word (beginning and/or ending).'),
+  ...perQuarter('VWK', 1, 'LARAWAN', 'Use vocabulary referring to oneself and family (Q I), school (Q II), community (Q III), environment (Q IV).'),
+  ...perQuarter('VWK', 3, 'LARAWAN', 'Read high frequency words accurately for meaning.'),
+  ...perQuarter('PWS', 5, 'LARAWAN', 'Sound out words accurately.'),
+  { code: 'RL1PA-I-2', game: 'BUUIN', text: 'Segment a two-three syllable word into its syllabic parts.' },
+  ...perQuarter('PWS', 4, 'BUUIN', 'Substitute individual sounds in simple words to make new words.'),
+  ...perQuarter('VWK', 5, 'BUUIN', 'Write words legibly and correctly.'),
 ];
 
 export interface BadgeRule {

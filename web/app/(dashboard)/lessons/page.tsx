@@ -36,7 +36,7 @@ export default function LessonsPage() {
     const body = {
       gameType: form.gameType,
       level: form.level,
-      competencyCode: form.competencyCode || competencies.find((c) => c.game === form.gameType)?.code || 'PA-1',
+      competencyCode: form.competencyCode || competencies.find((c) => c.game === form.gameType)?.code || 'RL1PWS-I-2',
       title: form.title,
       target: form.target,
       say: form.say,

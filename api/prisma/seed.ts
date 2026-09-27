@@ -62,17 +62,17 @@ const WORDS: SeedWord[] = [
 ];
 
 const LESSONS: { gameType: GameType; level: Level; competencyCode: string; title: string; target: string; say: string; example: string; body: string }[] = [
-  { gameType: 'TITIK', level: 'BEGINNER', competencyCode: 'PA-1', title: 'Ang mga Unang Titik', target: 'Mm  Ss  Aa', say: 'm, s, a', example: 'mata', body: 'Ito ang mga unang titik: M, S, at A. Pakinggan ang tunog ng bawat titik. Ang M ay parang mmm. Ang mata ay nagsisimula sa M.' },
-  { gameType: 'TITIK', level: 'INTERMEDIATE', competencyCode: 'PA-3', title: 'Unang Tunog ng Salita', target: 'B — bahay', say: 'ba. bahay', example: 'bahay', body: 'Bawat salita ay may unang tunog. Pakinggan: bahay. Ang unang tunog ay B. Hanapin ang titik na simula ng salita.' },
-  { gameType: 'TITIK', level: 'ADVANCED', competencyCode: 'PA-4', title: 'Huling Tunog ng Salita', target: 'araW', say: 'araw. Ang huling tunog ay wa', example: 'araw', body: 'Ngayon, pakinggan ang huling tunog ng salita. Araw — ang huling titik ay W. Hanapin ang titik na nasa dulo ng salita.' },
+  { gameType: 'TITIK', level: 'BEGINNER', competencyCode: 'RL1PWS-I-2', title: 'Ang mga Unang Titik', target: 'Mm  Ss  Aa', say: 'm, s, a', example: 'mata', body: 'Ito ang mga unang titik: M, S, at A. Pakinggan ang tunog ng bawat titik. Ang M ay parang mmm. Ang mata ay nagsisimula sa M.' },
+  { gameType: 'TITIK', level: 'INTERMEDIATE', competencyCode: 'RL1PA-I-5', title: 'Unang Tunog ng Salita', target: 'B — bahay', say: 'ba. bahay', example: 'bahay', body: 'Bawat salita ay may unang tunog. Pakinggan: bahay. Ang unang tunog ay B. Hanapin ang titik na simula ng salita.' },
+  { gameType: 'TITIK', level: 'ADVANCED', competencyCode: 'RL1PWS-IV-3', title: 'Huling Tunog ng Salita', target: 'araW', say: 'araw. Ang huling tunog ay wa', example: 'araw', body: 'Ngayon, pakinggan ang huling tunog ng salita. Araw — ang huling titik ay W. Hanapin ang titik na nasa dulo ng salita.' },
 
-  { gameType: 'LARAWAN', level: 'BEGINNER', competencyCode: 'VW-1', title: 'Mga Salita sa Bahay', target: 'baso', say: 'baso', example: 'baso', body: 'Tingnan ang larawan. Ito ay baso. Basahin natin: ba-so. Piliin ang salitang tugma sa larawan.' },
-  { gameType: 'LARAWAN', level: 'INTERMEDIATE', competencyCode: 'VW-2', title: 'Mga Salita sa Paaralan', target: 'aklat', say: 'aklat', example: 'aklat', body: 'Sa paaralan may aklat, lapis, at papel. Basahin ang salita at itugma sa tamang larawan.' },
-  { gameType: 'LARAWAN', level: 'ADVANCED', competencyCode: 'PW-1', title: 'Isang Tunog Lang ang Pinagkaiba', target: 'bato / pato', say: 'bato. pato', example: 'bato', body: 'Bato at pato — isang tunog lang ang magkaiba! Makinig nang mabuti at piliin ang tamang salita.' },
+  { gameType: 'LARAWAN', level: 'BEGINNER', competencyCode: 'RL1VWK-I-1', title: 'Mga Salita sa Bahay', target: 'baso', say: 'baso', example: 'baso', body: 'Tingnan ang larawan. Ito ay baso. Basahin natin: ba-so. Piliin ang salitang tugma sa larawan.' },
+  { gameType: 'LARAWAN', level: 'INTERMEDIATE', competencyCode: 'RL1VWK-II-3', title: 'Mga Salita sa Paaralan', target: 'aklat', say: 'aklat', example: 'aklat', body: 'Sa paaralan may aklat, lapis, at papel. Basahin ang salita at itugma sa tamang larawan.' },
+  { gameType: 'LARAWAN', level: 'ADVANCED', competencyCode: 'RL1PWS-IV-5', title: 'Isang Tunog Lang ang Pinagkaiba', target: 'bato / pato', say: 'bato. pato', example: 'bato', body: 'Bato at pato — isang tunog lang ang magkaiba! Makinig nang mabuti at piliin ang tamang salita.' },
 
-  { gameType: 'BUUIN', level: 'BEGINNER', competencyCode: 'PA-5', title: 'Pantig ng Salita', target: 'ba · ta', say: 'ba. ta. bata', example: 'bata', body: 'Ang salitang bata ay may dalawang pantig: ba at ta. Pagdugtungin ang mga pantig para mabuo ang salita.' },
-  { gameType: 'BUUIN', level: 'INTERMEDIATE', competencyCode: 'PA-5', title: 'Tatlong Pantig', target: 'ka · ma · tis', say: 'ka. ma. tis. kamatis', example: 'kamatis', body: 'Ang kamatis ay may tatlong pantig: ka, ma, tis. Ayusin ang mga pantig sa tamang pagkakasunod.' },
-  { gameType: 'BUUIN', level: 'ADVANCED', competencyCode: 'CC-1', title: 'Buuin Nang Mag-isa', target: '?', say: 'Pakinggan ang salita at buuin ito.', example: 'bintana', body: 'Walang tulong ngayon! Pakinggan ang salita, tingnan ang larawan, at buuin ang buong salita. May isang pantig na hindi kasama — mag-ingat!' },
+  { gameType: 'BUUIN', level: 'BEGINNER', competencyCode: 'RL1PA-I-2', title: 'Pantig ng Salita', target: 'ba · ta', say: 'ba. ta. bata', example: 'bata', body: 'Ang salitang bata ay may dalawang pantig: ba at ta. Pagdugtungin ang mga pantig para mabuo ang salita.' },
+  { gameType: 'BUUIN', level: 'INTERMEDIATE', competencyCode: 'RL1PA-I-2', title: 'Tatlong Pantig', target: 'ka · ma · tis', say: 'ka. ma. tis. kamatis', example: 'kamatis', body: 'Ang kamatis ay may tatlong pantig: ka, ma, tis. Ayusin ang mga pantig sa tamang pagkakasunod.' },
+  { gameType: 'BUUIN', level: 'ADVANCED', competencyCode: 'RL1VWK-I-5', title: 'Buuin Nang Mag-isa', target: '?', say: 'Pakinggan ang salita at buuin ito.', example: 'bintana', body: 'Walang tulong ngayon! Pakinggan ang salita, tingnan ang larawan, at buuin ang buong salita. May isang pantig na hindi kasama — mag-ingat!' },
 ];
 
 const PUPILS = [
