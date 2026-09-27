@@ -2,8 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { api, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES, THEME_NAMES } from '@/lib/api';
+import { Pagination, usePagination } from '@/components/Pagination';
 
-const QUICK_EMOJI = ['🐕','🐈','🐟','🐓','🏠','🏫','📕','✏️','⚽','🎈','🍌','🍅','🌽','🌳','🌸','☀️','🌙','⭐','👟','☂️','🛏️','🥛','🔑','🪨'];
+// Picture choices for Grade 1 nouns. Mostly older emoji that every Android tablet
+// shows; the newer ones (🦷 🧹 Android 9+, 🧊 Android 10+, 🪨 🪴 🪟 Android 11+)
+// can show as a blank box on old devices — upload an image URL for those if needed.
+const EMOJI_GROUPS: { name: string; emoji: string[] }[] = [
+  { name: 'Animals', emoji: ['🐕','🐈','🐟','🐓','🦆','🐻','🐘','🐃','🐎','🐖','🐐','🐸'] },
+  { name: 'Food', emoji: ['🍌','🍅','🌽','🍇','🍎','🍍','🥚','🍚','🥛','☕'] },
+  { name: 'Home and school', emoji: ['🏠','🏫','🚪','🪟','🛏️','🔑','🧹','⌚','☂️','👟','📕','📄','✏️','✂️','⚽','🎈'] },
+  { name: 'People and body', emoji: ['👨','👩','🧒','👩‍🏫','👁️','👃','👂','👄','✋','🦷'] },
+  { name: 'Nature', emoji: ['🌳','🌸','🪴','🍃','☀️','🌙','⭐','☁️','🌧️','💧','🪨','🧊'] },
+];
 
 const empty = {
   id: 0,
@@ -24,6 +34,7 @@ export default function WordsPage() {
   const [gameType, setGameType] = useState('');
   const [form, setForm] = useState<typeof empty | null>(null);
   const [error, setError] = useState('');
+  const pager = usePagination(words, [q, level, gameType]);
 
   const load = () => {
     const params = new URLSearchParams();
@@ -99,7 +110,7 @@ export default function WordsPage() {
             </tr>
           </thead>
           <tbody>
-            {words.map((w) => (
+            {pager.rows.map((w) => (
               <tr key={w.id}>
                 <td className="td">
                   <span className="flex items-center gap-3">
@@ -144,11 +155,12 @@ export default function WordsPage() {
             ) : null}
           </tbody>
         </table>
+        <Pagination {...pager} />
       </section>
 
       {form ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && setForm(null)}>
-          <form onSubmit={save} className="w-full max-w-xl rounded-xl bg-white">
+          <form onSubmit={save} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white">
             <header className="border-b border-line px-5 py-4">
               <h3 className="font-bold">{form.id ? `Edit "${form.word}"` : 'Add word'}</h3>
             </header>
@@ -167,11 +179,25 @@ export default function WordsPage() {
 
               <div>
                 <label className="label">Picture</label>
-                <div className="flex items-center gap-3">
-                  <span className="grid h-16 w-16 place-items-center rounded-lg bg-ground text-3xl">{form.emoji}</span>
-                  <div className="flex flex-wrap gap-1">
-                    {QUICK_EMOJI.map((e) => (
-                      <button type="button" key={e} className="h-8 w-8 rounded border border-line hover:bg-[#e6eefb]" onClick={() => setForm({ ...form, emoji: e })}>{e}</button>
+                <div className="flex items-start gap-3">
+                  <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-ground text-3xl">{form.emoji}</span>
+                  <div className="grid max-h-48 min-w-0 flex-1 gap-2 overflow-y-auto rounded-lg border border-line p-2">
+                    {EMOJI_GROUPS.map((g) => (
+                      <div key={g.name}>
+                        <span className="text-[11px] font-semibold text-ink3">{g.name}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {g.emoji.map((e) => (
+                            <button
+                              type="button"
+                              key={e}
+                              className={`h-8 w-8 rounded border hover:bg-[#e6eefb] ${form.emoji === e ? 'border-accent bg-[#e6eefb]' : 'border-line'}`}
+                              onClick={() => setForm({ ...form, emoji: e })}
+                            >
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

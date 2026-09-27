@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { Pagination, usePagination } from '@/components/Pagination';
 
 export default function PupilsPage() {
   const [pupils, setPupils] = useState<any[]>([]);
   const [form, setForm] = useState<{ id: number; name: string; section: string; loginCode: string } | null>(null);
   const [error, setError] = useState('');
+  const pager = usePagination(pupils);
 
   const load = () => api.pupils().then(setPupils).catch((e) => setError(e.message));
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function PupilsPage() {
             </tr>
           </thead>
           <tbody>
-            {pupils.map((p) => (
+            {pager.rows.map((p) => (
               <tr key={p.id} className={p.active ? '' : 'opacity-60'}>
                 <td className="td font-semibold">{p.name}</td>
                 <td className="td"><code className="rounded bg-ground px-2 py-1 font-bold tracking-widest">{p.loginCode}</code></td>
@@ -85,6 +87,7 @@ export default function PupilsPage() {
             {pupils.length === 0 ? <tr><td className="td py-8 text-center text-ink3" colSpan={7}>No pupils registered yet.</td></tr> : null}
           </tbody>
         </table>
+        <Pagination {...pager} />
       </section>
 
       {form ? (

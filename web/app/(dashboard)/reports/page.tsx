@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES } from '@/lib/api';
+import { Pagination, usePagination } from '@/components/Pagination';
 
 export default function ReportsPage() {
   return (
@@ -131,6 +132,7 @@ function ExportCsv({ pupils }: { pupils: any[] }) {
 
 function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
   const maxWrong = Math.max(1, ...missed.map((m) => m.wrong));
+  const pager = usePagination(klass);
 
   return (
     <>
@@ -151,7 +153,7 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
             </tr>
           </thead>
           <tbody>
-            {klass.map((p) => (
+            {pager.rows.map((p) => (
               <tr key={p.id}>
                 <td className="td font-semibold">
                   <Link href={`/reports?pupil=${p.id}`} className="text-accent">{p.name}</Link>
@@ -176,6 +178,7 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
             ))}
           </tbody>
         </table>
+        <Pagination {...pager} />
       </section>
 
       <section className="panel">
@@ -204,6 +207,7 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
 }
 
 function PupilReport({ report }: { report: any }) {
+  const pager = usePagination<any>(report?.history ?? [], [report?.id]);
   if (!report) return <p className="text-sm text-ink3">Loading…</p>;
 
   return (
@@ -278,7 +282,7 @@ function PupilReport({ report }: { report: any }) {
             </tr>
           </thead>
           <tbody>
-            {report.history.map((h: any) => (
+            {pager.rows.map((h: any) => (
               <tr key={h.id}>
                 <td className="td">{new Date(h.playedAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</td>
                 <td className="td">{GAME_NAMES[h.gameType]}</td>
@@ -292,6 +296,7 @@ function PupilReport({ report }: { report: any }) {
             {report.history.length === 0 ? <tr><td className="td py-8 text-center text-ink3" colSpan={7}>No rounds synced yet.</td></tr> : null}
           </tbody>
         </table>
+        <Pagination {...pager} />
       </section>
     </>
   );
