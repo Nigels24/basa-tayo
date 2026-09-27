@@ -52,6 +52,39 @@ export async function request(path: string, opts: { method?: string; body?: any 
   return res.status === 204 ? null : res.json();
 }
 
+/** Fetch a file with the teacher's token (a plain link would not send it) and save it. */
+export async function download(path: string, fallbackName: string) {
+  const token = getToken();
+  const res = await fetch(BASE + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: 'no-store',
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    logout();
+    if (typeof window !== 'undefined') window.location.href = '/login';
+    throw new Error('Please log in again');
+  }
+  if (!res.ok) {
+    let message = 'The download failed. Please try again.';
+    try {
+      const data = await res.json();
+      message = Array.isArray(data.message) ? data.message[0] : data.message ?? message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const name = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000); // Safari needs the URL a moment after click
+}
+
 export const api = {
   // word bank
   words: (query = '') => request('/words' + query),
@@ -78,6 +111,8 @@ export const api = {
   recent: () => request('/reports/recent'),
   missed: (limit = 8) => request(`/reports/missed?limit=${limit}`),
   pupilReport: (id: number) => request(`/reports/pupil/${id}`),
+  exportCsv: (kind: 'sessions' | 'answers', query: string) =>
+    download(`/reports/export/${kind}.csv${query}`, `basa-tayo-${kind}.csv`),
 };
 
 export const GAME_NAMES: Record<string, string> = {

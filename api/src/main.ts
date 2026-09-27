@@ -4,7 +4,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: true });
+  app.enableCors({ origin: true, exposedHeaders: ['Content-Disposition'] }); // lets the web app read CSV file names
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.setGlobalPrefix('api');
   const port = process.env.PORT || 3000;

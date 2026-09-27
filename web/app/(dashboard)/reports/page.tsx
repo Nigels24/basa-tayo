@@ -53,7 +53,79 @@ function Reports() {
       </div>
 
       {pupilId ? <PupilReport report={report} /> : <ClassReport klass={klass} missed={missed} />}
+
+      <ExportCsv pupils={pupils} />
     </>
+  );
+}
+
+/** Research data for Chapter 4 — raw rounds and answers as Excel-ready CSV. */
+function ExportCsv({ pupils }: { pupils: any[] }) {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [pupil, setPupil] = useState('');
+  const [anonymize, setAnonymize] = useState(true);
+  const [busy, setBusy] = useState<'' | 'sessions' | 'answers'>('');
+  const [error, setError] = useState('');
+
+  async function save(kind: 'sessions' | 'answers') {
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    if (pupil) q.set('pupilId', pupil);
+    if (anonymize) q.set('anonymize', 'true');
+
+    setBusy(kind);
+    setError('');
+    try {
+      const qs = q.toString();
+      await api.exportCsv(kind, qs ? `?${qs}` : '');
+    } catch (e: any) {
+      setError(`Could not download the file. ${e.message ?? ''}`.trim());
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="border-b border-line px-5 py-3">
+        <h2 className="text-sm font-bold">Export CSV</h2>
+        <p className="text-xs text-ink3">Raw rounds and answers for analysis in Excel. Leave the dates empty to export everything.</p>
+      </div>
+      <div className="grid gap-4 p-5">
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="label">From</label>
+            <input type="date" className="input w-auto" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">To</label>
+            <input type="date" className="input w-auto" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Pupil</label>
+            <select className="input w-auto" value={pupil} onChange={(e) => setPupil(e.target.value)}>
+              <option value="">All pupils</option>
+              {pupils.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 pb-2 text-sm text-ink2">
+            <input type="checkbox" checked={anonymize} onChange={(e) => setAnonymize(e.target.checked)} />
+            Anonymize names
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button className="btn-primary disabled:opacity-60" disabled={!!busy} onClick={() => save('sessions')}>
+            {busy === 'sessions' ? 'Preparing…' : 'Download rounds'}
+          </button>
+          <button className="btn-ghost disabled:opacity-60" disabled={!!busy} onClick={() => save('answers')}>
+            {busy === 'answers' ? 'Preparing…' : 'Download answers'}
+          </button>
+        </div>
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      </div>
+    </section>
   );
 }
 

@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
+import { manilaDateTime, toCsv } from './csv';
+
+/** from is inclusive, to is exclusive (the start of the day after the chosen end date). */
+export type ExportFilter = { from?: Date; to?: Date; pupilId?: number; anonymize: boolean };
 
 @Injectable()
 export class ReportsService {
@@ -123,6 +128,93 @@ export class ReportsService {
       .filter((r) => r.wrong > 0)
       .sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total)
       .slice(0, limit);
+  }
+
+  /** Research export: one row per round (game_sessions). */
+  async exportSessions(teacherId: number, filter: ExportFilter) {
+    const { where, pupilCols, pupilCells } = await this.exportScope(teacherId, filter);
+    const sessions = await this.prisma.gameSession.findMany({
+      where,
+      include: { game: { select: { gameType: true } } },
+      orderBy: [{ playedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    return toCsv(
+      ['session_id', ...pupilCols, 'game', 'level', 'correct_count', 'item_count', 'accuracy_pct', 'stars', 'points', 'played_at', 'synced_at'],
+      sessions.map((s) => [
+        s.id,
+        ...pupilCells(s.pupilId),
+        s.game.gameType,
+        s.level,
+        s.correctCount,
+        s.itemCount,
+        s.accuracy,
+        s.stars,
+        s.score,
+        manilaDateTime(s.playedAt),
+        manilaDateTime(s.syncedAt),
+      ]),
+    );
+  }
+
+  /**
+   * Research export: one row per answered item (session_answers). Answers are
+   * stored in the order they were played, so item_no is their position by id.
+   */
+  async exportAnswers(teacherId: number, filter: ExportFilter) {
+    const { where, pupilCols, pupilCells } = await this.exportScope(teacherId, filter);
+    const sessions = await this.prisma.gameSession.findMany({
+      where,
+      include: {
+        game: { select: { gameType: true } },
+        answers: { include: { word: { select: { filipinoWord: true } } }, orderBy: { id: 'asc' } },
+      },
+      orderBy: [{ playedAt: 'asc' }, { id: 'asc' }],
+    });
+
+    return toCsv(
+      ['session_id', ...pupilCols, 'game', 'level', 'item_no', 'prompt', 'target_word', 'given_answer', 'is_correct'],
+      sessions.flatMap((s) =>
+        s.answers.map((a, i) => [
+          s.id,
+          ...pupilCells(s.pupilId),
+          s.game.gameType,
+          s.level,
+          i + 1,
+          a.prompt,
+          a.word?.filipinoWord,
+          a.givenAnswer,
+          a.isCorrect,
+        ]),
+      ),
+    );
+  }
+
+  /**
+   * Shared filter and pupil columns for both exports. Anonymous codes P01, P02…
+   * follow the whole roster's id order, so they match across files and filters.
+   * Login codes are never exported.
+   */
+  private async exportScope(teacherId: number, filter: ExportFilter) {
+    const roster = await this.prisma.user.findMany({
+      where: { role: 'PUPIL', teacherId },
+      select: { id: true, name: true },
+      orderBy: { id: 'asc' },
+    });
+    const width = Math.max(2, String(roster.length).length);
+    const byId = new Map(roster.map((p, i) => [p.id, { name: p.name, code: 'P' + String(i + 1).padStart(width, '0') }]));
+
+    const ids = filter.pupilId ? roster.filter((p) => p.id === filter.pupilId).map((p) => p.id) : roster.map((p) => p.id);
+    const playedAt: Prisma.DateTimeFilter = {};
+    if (filter.from) playedAt.gte = filter.from;
+    if (filter.to) playedAt.lt = filter.to;
+
+    return {
+      where: { pupilId: { in: ids }, playedAt } satisfies Prisma.GameSessionWhereInput,
+      pupilCols: filter.anonymize ? ['pupil_code'] : ['pupil_id', 'pupil_name'],
+      pupilCells: (pupilId: number) =>
+        filter.anonymize ? [byId.get(pupilId)?.code] : [pupilId, byId.get(pupilId)?.name],
+    };
   }
 
   /** Recent rounds for the dashboard activity list. */
