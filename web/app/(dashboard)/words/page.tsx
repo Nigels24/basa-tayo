@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES, THEME_NAMES } from '@/lib/api';
 import { Pagination, usePagination } from '@/components/Pagination';
 import { Button } from '@/components/ui/Button';
@@ -10,18 +10,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { SelectField } from '@/components/ui/SelectField';
 import { SearchIcon, TextInput } from '@/components/ui/TextInput';
 import { toastError, toastSuccess } from '@/components/ui/toast';
+import { EMOJI_GROUPS, GRID_EMOJI, PickEmoji, emojiNeedle, loadMoreEmoji, searchCurated, searchMore } from '@/lib/emoji-list';
 
-// Picture choices for Grade 1 nouns. Mostly older emoji that every Android tablet
-// shows; the newer ones (🦷 🧹 Android 9+, 🧊 Android 10+, 🪨 🪴 🪟 Android 11+)
-// can show as a blank box on old devices — upload an image URL for those if needed.
-const EMOJI_GROUPS: { name: string; emoji: string[] }[] = [
-  { name: 'Animals', emoji: ['🐕','🐈','🐟','🐓','🦆','🐻','🐘','🐃','🐎','🐖','🐐','🐸'] },
-  { name: 'Food', emoji: ['🍌','🍅','🌽','🍇','🍎','🍍','🥚','🍚','🥛','☕'] },
-  { name: 'Home and school', emoji: ['🏠','🏫','🚪','🪟','🛏️','🔑','🧹','⌚','☂️','👟','📕','📄','✏️','✂️','⚽','🎈'] },
-  { name: 'People and body', emoji: ['👨','👩','🧒','👩‍🏫','👁️','👃','👂','👄','✋','🦷'] },
-  { name: 'Nature', emoji: ['🌳','🌸','🪴','🍃','☀️','🌙','⭐','☁️','🌧️','💧','🪨','🧊'] },
-];
-const GRID_EMOJI = new Set(EMOJI_GROUPS.flatMap((g) => g.emoji));
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' }); // 👨‍👩‍👧, 👋🏽 and flags count as one
 
 const SORTS = [
@@ -61,6 +51,9 @@ export default function WordsPage() {
   const [error, setError] = useState('');
   const [otherEmoji, setOtherEmoji] = useState(''); // text of the "Ibang emoji" box; the picture itself is form.emoji
   const [emojiError, setEmojiError] = useState('');
+  const [pictureSearch, setPictureSearch] = useState('');
+  const [pictureQ, setPictureQ] = useState(''); // picture search, debounced and trimmed
+  const [morePictures, setMorePictures] = useState<PickEmoji[] | null>(null); // null while the full list loads
   const [wordError, setWordError] = useState(''); // e.g. 409: the word is already in the bank
   const [saving, setSaving] = useState(false);
   const [toDelete, setToDelete] = useState<{ id: number; word: string } | null>(null);
@@ -100,6 +93,30 @@ export default function WordsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setPictureQ(emojiNeedle(pictureSearch)), 150);
+    return () => clearTimeout(t);
+  }, [pictureSearch]);
+
+  // The full emoji list is fetched only once the teacher searches for a picture.
+  // Only the latest search shows its results, so a slow first load never lands on a newer search.
+  const latestPictureQ = useRef('');
+  const findMorePictures = () => {
+    latestPictureQ.current = pictureQ;
+    if (!pictureQ) return;
+    const needle = pictureQ;
+    setMorePictures(null);
+    loadMoreEmoji()
+      .then((list) => latestPictureQ.current === needle && setMorePictures(searchMore(list, needle)))
+      .catch(() => latestPictureQ.current === needle && setMorePictures([]));
+  };
+
+  useEffect(() => {
+    findMorePictures();
+  }, [pictureQ]);
+
+  const curatedPictures = useMemo(() => (pictureQ ? searchCurated(pictureQ) : EMOJI_GROUPS), [pictureQ]);
+
   function clearFilters() {
     setSearch('');
     setQ('');
@@ -116,7 +133,30 @@ export default function WordsPage() {
     setEmojiError('');
     setWordError('');
     setError('');
+    setPictureSearch('');
+    setPictureQ('');
   }
+
+  /** Grid and search results pick the picture the same way; the "Ibang emoji" box is cleared. */
+  function pickPicture(emoji: string) {
+    if (!form) return;
+    setForm({ ...form, emoji });
+    setOtherEmoji('');
+    setEmojiError('');
+  }
+
+  const pictureButton = (p: PickEmoji) => (
+    <button
+      type="button"
+      key={p.emoji}
+      title={p.name}
+      aria-label={p.name}
+      className={`h-8 w-8 rounded border hover:bg-[#e6eefb] ${form?.emoji === p.emoji ? 'border-accent bg-[#e6eefb]' : 'border-line'}`}
+      onClick={() => pickPicture(p.emoji)}
+    >
+      {p.emoji}
+    </button>
+  );
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -308,29 +348,46 @@ export default function WordsPage() {
               </div>
 
               <div>
-                <label className="label">Picture</label>
-                <div className="grid max-h-48 gap-2 overflow-y-auto rounded-lg border border-line p-2">
-                    {EMOJI_GROUPS.map((g) => (
+                <label className="label" htmlFor="picture-search">Picture</label>
+                <TextInput
+                  id="picture-search"
+                  className="mb-2"
+                  type="search"
+                  placeholder="Hanapin ang larawan (hal. goat, kambing)"
+                  icon={<SearchIcon />}
+                  value={pictureSearch}
+                  onChange={(e) => setPictureSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.preventDefault(); // don't submit the word form
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPictureSearch('');
+                      setPictureQ('');
+                    }
+                  }}
+                />
+                <div className="grid max-h-56 gap-2 overflow-y-auto rounded-lg border border-line p-2" aria-live="polite">
+                    {curatedPictures.map((g) => (
                       <div key={g.name}>
                         <span className="text-[11px] font-semibold text-ink3">{g.name}</span>
                         <div className="flex flex-wrap gap-1">
-                          {g.emoji.map((e) => (
-                            <button
-                              type="button"
-                              key={e}
-                              className={`h-8 w-8 rounded border hover:bg-[#e6eefb] ${form.emoji === e ? 'border-accent bg-[#e6eefb]' : 'border-line'}`}
-                              onClick={() => {
-                                setForm({ ...form, emoji: e });
-                                setOtherEmoji('');
-                                setEmojiError('');
-                              }}
-                            >
-                              {e}
-                            </button>
-                          ))}
+                          {g.emoji.map((x) => pictureButton({ emoji: x.emoji, name: x.words[0] }))}
                         </div>
                       </div>
                     ))}
+                    {pictureQ ? (
+                      morePictures === null ? (
+                        <p className="text-xs text-ink3">Hinahanap ang iba pang emoji…</p>
+                      ) : morePictures.length > 0 ? (
+                        <div>
+                          <span className="text-[11px] font-semibold text-ink3">Iba pang emoji</span>
+                          <div className="flex flex-wrap gap-1">{morePictures.map(pictureButton)}</div>
+                        </div>
+                      ) : curatedPictures.length === 0 ? (
+                        <EmptyState icon="🔍" title="Walang nakitang larawan" message="Subukan sa English, o i-paste sa Ibang emoji." />
+                      ) : null
+                    ) : null}
                 </div>
                 <div className="mt-3 flex items-start gap-3">
                   <span
