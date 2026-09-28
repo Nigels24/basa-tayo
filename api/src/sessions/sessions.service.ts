@@ -14,10 +14,10 @@ export class SessionsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * The device plays offline and posts finished rounds here. Answers are
-   * re-checked against the stored score rules, so a modified app can't invent
-   * a score: the device sends what the pupil answered, the server decides the
-   * points, stars and highest score.
+   * The device plays offline and posts finished rounds here. Each answer is
+   * checked on the device, which sends a per-item isCorrect; the server does
+   * not re-check answers, it computes points, stars, highest score and badges
+   * from those per-item results.
    *
    * clientId makes this idempotent — re-sending a round after a dropped
    * connection does not create a duplicate.

@@ -146,7 +146,7 @@ export default function Play() {
       throw e;
     }
 
-    // Local estimate for the results screen; the API re-scores it on sync.
+    // Local result for the results screen; on sync the API computes score and stars from the same per-item isCorrect.
     setLastResult({
       clientId: session.clientId,
       gameType: game as GameType,

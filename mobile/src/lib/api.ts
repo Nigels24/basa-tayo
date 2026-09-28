@@ -61,7 +61,7 @@ export const api = {
   /** The pupil's stars, highest scores and badges. */
   progress: () => request('/content/progress'),
 
-  /** Posts rounds played offline. The server re-checks the answers and scores them. */
+  /** Posts rounds played offline. Answers were checked on the device; the server scores the round from each isCorrect. */
   syncSessions: (sessions: unknown[]) => request('/sessions/sync', { method: 'POST', body: { sessions }, timeoutMs: SYNC_TIMEOUT_MS }),
 };
 

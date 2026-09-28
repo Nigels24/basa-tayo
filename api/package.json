@@ -9,6 +9,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "seed": "ts-node prisma/seed.ts",
+    "reset:test-data": "ts-node prisma/reset-test-data.ts",
     "prisma:studio": "prisma studio"
   },
   "prisma": {
