@@ -27,6 +27,13 @@ export function logout() {
   localStorage.removeItem(NAME_KEY);
 }
 
+/** An error response from the API; status lets a form react to e.g. 409 Conflict. */
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
 export async function request(path: string, opts: { method?: string; body?: any } = {}) {
   const token = getToken();
   const res = await fetch(BASE + path, {
@@ -47,7 +54,7 @@ export async function request(path: string, opts: { method?: string; body?: any 
       const data = await res.json();
       message = Array.isArray(data.message) ? data.message[0] : data.message ?? message;
     } catch {}
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   return res.status === 204 ? null : res.json();
 }

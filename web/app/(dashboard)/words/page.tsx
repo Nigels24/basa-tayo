@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES, THEME_NAMES } from '@/lib/api';
+import { api, ApiError, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES, THEME_NAMES } from '@/lib/api';
 import { Pagination, usePagination } from '@/components/Pagination';
 
 // Picture choices for Grade 1 nouns. Mostly older emoji that every Android tablet
@@ -14,6 +14,8 @@ const EMOJI_GROUPS: { name: string; emoji: string[] }[] = [
   { name: 'People and body', emoji: ['👨','👩','🧒','👩‍🏫','👁️','👃','👂','👄','✋','🦷'] },
   { name: 'Nature', emoji: ['🌳','🌸','🪴','🍃','☀️','🌙','⭐','☁️','🌧️','💧','🪨','🧊'] },
 ];
+const GRID_EMOJI = new Set(EMOJI_GROUPS.flatMap((g) => g.emoji));
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' }); // 👨‍👩‍👧, 👋🏽 and flags count as one
 
 const empty = {
   id: 0,
@@ -34,6 +36,10 @@ export default function WordsPage() {
   const [gameType, setGameType] = useState('');
   const [form, setForm] = useState<typeof empty | null>(null);
   const [error, setError] = useState('');
+  const [otherEmoji, setOtherEmoji] = useState(''); // text of the "Ibang emoji" box; the picture itself is form.emoji
+  const [emojiError, setEmojiError] = useState('');
+  const [wordError, setWordError] = useState(''); // e.g. 409: the word is already in the bank
+  const [saving, setSaving] = useState(false);
   const pager = usePagination(words, [q, level, gameType]);
 
   const load = () => {
@@ -42,34 +48,58 @@ export default function WordsPage() {
     if (level) params.set('level', level);
     if (gameType) params.set('gameType', gameType);
     const query = params.toString();
-    api.words(query ? `?${query}` : '').then(setWords).catch((e) => setError(e.message));
+    api.words(query ? `?${query}` : '')
+      .then((ws: any[]) => setWords(ws.filter((w) => w.active))) // deleted words are kept only for past results.catch((e) => setError(e.message));
   };
 
   useEffect(() => {
     load();
   }, [q, level, gameType]);
 
+  /** Open the form; a picture that is not in the grid goes into the "Ibang emoji" box. */
+  function openForm(f: typeof empty) {
+    setForm(f);
+    setOtherEmoji(f.emoji !== empty.emoji && !GRID_EMOJI.has(f.emoji) ? f.emoji : '');
+    setEmojiError('');
+    setWordError('');
+    setError('');
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!form) return;
+    if (!form || saving) return;
     setError('');
+    setWordError('');
+    const emoji = form.emoji.trim();
+    if (!emoji || emoji === empty.emoji) {
+      setEmojiError('Pumili o mag-paste ng larawan (emoji) para sa salita.');
+      return;
+    }
+    if ([...graphemes.segment(emoji)].length > 1) {
+      setEmojiError('Isang emoji lang ang puwede.');
+      return;
+    }
     const body = {
       word: form.word.trim().toLowerCase(),
       syllables: form.syllables.split(/[-·\s]+/).filter(Boolean),
       theme: form.theme,
       level: form.level,
       gameTypes: form.gameTypes,
-      emoji: form.emoji,
+      emoji,
       imageUrl: form.imageUrl || undefined,
       audioUrl: form.audioUrl || undefined,
     };
+    setSaving(true);
     try {
       if (form.id) await api.updateWord(form.id, body);
       else await api.createWord(body);
       setForm(null);
       load();
     } catch (err: any) {
-      setError(err.message);
+      if (err instanceof ApiError && err.status === 409) setWordError(err.message);
+      else setError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -91,7 +121,7 @@ export default function WordsPage() {
           <option value="">All levels</option>
           {LEVEL_KEYS.map((l) => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}
         </select>
-        <button className="btn-primary ml-auto" onClick={() => setForm({ ...empty })}>+ Add word</button>
+        <button className="btn-primary ml-auto" onClick={() => openForm({ ...empty })}>+ Add word</button>
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -114,7 +144,7 @@ export default function WordsPage() {
               <tr key={w.id}>
                 <td className="td">
                   <span className="flex items-center gap-3">
-                    <span className="text-2xl">{w.emoji ?? '❓'}</span>
+                    <span className="h-8 w-8 shrink-0 overflow-hidden whitespace-nowrap text-center text-2xl leading-8">{w.emoji ?? '❓'}</span>
                     <b className="text-base">{w.filipinoWord}</b>
                   </span>
                 </td>
@@ -132,7 +162,7 @@ export default function WordsPage() {
                 <td className="td text-right whitespace-nowrap">
                   <button
                     className="btn-ghost mr-2"
-                    onClick={() => setForm({
+                    onClick={() => openForm({
                       id: w.id,
                       word: w.filipinoWord,
                       syllables: w.syllables.join('-'),
@@ -169,7 +199,17 @@ export default function WordsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="label">Filipino word</label>
-                  <input className="input" value={form.word} onChange={(e) => setForm({ ...form, word: e.target.value })} placeholder="bola" required />
+                  <input
+                    className="input"
+                    value={form.word}
+                    onChange={(e) => {
+                      setForm({ ...form, word: e.target.value });
+                      setWordError('');
+                    }}
+                    placeholder="bola"
+                    required
+                  />
+                  {wordError ? <p className="mt-1 text-sm text-red-600">{wordError}</p> : null}
                 </div>
                 <div>
                   <label className="label">Syllables (dash-separated)</label>
@@ -179,9 +219,7 @@ export default function WordsPage() {
 
               <div>
                 <label className="label">Picture</label>
-                <div className="flex items-start gap-3">
-                  <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-ground text-3xl">{form.emoji}</span>
-                  <div className="grid max-h-48 min-w-0 flex-1 gap-2 overflow-y-auto rounded-lg border border-line p-2">
+                <div className="grid max-h-48 gap-2 overflow-y-auto rounded-lg border border-line p-2">
                     {EMOJI_GROUPS.map((g) => (
                       <div key={g.name}>
                         <span className="text-[11px] font-semibold text-ink3">{g.name}</span>
@@ -191,7 +229,11 @@ export default function WordsPage() {
                               type="button"
                               key={e}
                               className={`h-8 w-8 rounded border hover:bg-[#e6eefb] ${form.emoji === e ? 'border-accent bg-[#e6eefb]' : 'border-line'}`}
-                              onClick={() => setForm({ ...form, emoji: e })}
+                              onClick={() => {
+                                setForm({ ...form, emoji: e });
+                                setOtherEmoji('');
+                                setEmojiError('');
+                              }}
                             >
                               {e}
                             </button>
@@ -199,6 +241,31 @@ export default function WordsPage() {
                         </div>
                       </div>
                     ))}
+                </div>
+                <div className="mt-3 flex items-start gap-3">
+                  <span
+                    className={`grid h-20 w-20 shrink-0 place-items-center overflow-hidden whitespace-nowrap rounded-lg bg-ground text-5xl ${[empty.emoji, ''].includes(form.emoji.trim()) ? 'opacity-40' : ''}`}
+                    aria-label="Picture preview"
+                  >
+                    {form.emoji.trim() || empty.emoji}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <label className="label" htmlFor="other-emoji">Ibang emoji (i-type o i-paste)</label>
+                    <input
+                      id="other-emoji"
+                      className="input"
+                      value={otherEmoji}
+                      onChange={(e) => {
+                        setOtherEmoji(e.target.value);
+                        setForm({ ...form, emoji: e.target.value });
+                        setEmojiError('');
+                      }}
+                      placeholder="🦋"
+                    />
+                    <p className="mt-1 text-xs text-ink3">
+                      Kung wala sa listahan, i-paste dito. Ang ilang bagong emoji ay maaaring hindi lumabas sa lumang Android.
+                    </p>
+                    {emojiError ? <p className="mt-1 text-sm text-red-600">{emojiError}</p> : null}
                   </div>
                 </div>
                 <input className="input mt-2" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="Cloudinary image URL (optional)" />
@@ -248,7 +315,7 @@ export default function WordsPage() {
 
             <footer className="flex justify-end gap-2 border-t border-line px-5 py-4">
               <button type="button" className="btn-ghost" onClick={() => setForm(null)}>Cancel</button>
-              <button className="btn-primary">{form.id ? 'Save changes' : 'Add word'}</button>
+              <button className="btn-primary disabled:opacity-60" disabled={saving}>{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add word'}</button>
             </footer>
           </form>
         </div>
