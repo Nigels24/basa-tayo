@@ -5,10 +5,14 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES } from '@/lib/api';
 import { Pagination, usePagination } from '@/components/Pagination';
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { SelectField } from '@/components/ui/SelectField';
 
 export default function ReportsPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-ink3">Loading…</p>}>
+    <Suspense fallback={<LoadingState />}>
       <Reports />
     </Suspense>
   );
@@ -23,45 +27,65 @@ function Reports() {
   const [klass, setKlass] = useState<any[]>([]);
   const [missed, setMissed] = useState<any[]>([]);
   const [report, setReport] = useState<any>(null);
+  const [reportFailed, setReportFailed] = useState(false);
+  const [classLoading, setClassLoading] = useState(true);
 
   useEffect(() => {
     api.pupils().then(setPupils).catch(() => {});
   }, []);
 
   useEffect(() => {
+    setReport(null);
+    setReportFailed(false);
     if (pupilId) {
-      api.pupilReport(Number(pupilId)).then(setReport).catch(() => setReport(null));
+      api
+        .pupilReport(Number(pupilId))
+        .then((r) => (r ? setReport(r) : setReportFailed(true)))
+        .catch(() => setReportFailed(true));
     } else {
-      setReport(null);
-      api.classScores().then(setKlass).catch(() => {});
-      api.missed(10).then(setMissed).catch(() => {});
+      Promise.all([
+        api.classScores().then(setKlass).catch(() => {}),
+        api.missed(10).then(setMissed).catch(() => {}),
+      ]).finally(() => setClassLoading(false));
     }
   }, [pupilId]);
 
+  const pupilOptions = pupils.map((p) => ({ value: String(p.id), label: p.name }));
+
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-semibold text-ink2">Show report for</label>
-        <select
-          className="input w-auto"
+      <div className="flex flex-wrap items-end gap-3">
+        <SelectField
+          className="w-full sm:w-64"
+          label="Show report for"
           value={pupilId ?? ''}
-          onChange={(e) => router.push(e.target.value ? `/reports?pupil=${e.target.value}` : '/reports')}
-        >
-          <option value="">Whole class</option>
-          {pupils.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+          onChange={(v) => router.push(v ? `/reports?pupil=${v}` : '/reports')}
+          options={[{ value: '', label: 'Whole class' }, ...pupilOptions]}
+        />
         {pupilId ? <Link className="btn-ghost" href="/reports">Whole class</Link> : null}
       </div>
 
-      {pupilId ? <PupilReport report={report} /> : <ClassReport klass={klass} missed={missed} />}
+      {pupilId ? (
+        reportFailed ? (
+          <section className="panel">
+            <EmptyState icon="⚠️" title="Hindi ma-load ang report" message="Subukan muli, o pumili ng ibang pupil." />
+          </section>
+        ) : (
+          <PupilReport report={report} />
+        )
+      ) : classLoading ? (
+        <section className="panel"><LoadingState message="Kinukuha ang report…" /></section>
+      ) : (
+        <ClassReport klass={klass} missed={missed} />
+      )}
 
-      <ExportCsv pupils={pupils} />
+      <ExportCsv pupilOptions={pupilOptions} />
     </>
   );
 }
 
 /** Research data for Chapter 4 — raw rounds and answers as Excel-ready CSV. */
-function ExportCsv({ pupils }: { pupils: any[] }) {
+function ExportCsv({ pupilOptions }: { pupilOptions: { value: string; label: string }[] }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [pupil, setPupil] = useState('');
@@ -104,25 +128,25 @@ function ExportCsv({ pupils }: { pupils: any[] }) {
             <label className="label">To</label>
             <input type="date" className="input w-auto" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
           </div>
-          <div>
-            <label className="label">Pupil</label>
-            <select className="input w-auto" value={pupil} onChange={(e) => setPupil(e.target.value)}>
-              <option value="">All pupils</option>
-              {pupils.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
+          <SelectField
+            className="w-full sm:w-56"
+            label="Pupil"
+            value={pupil}
+            onChange={setPupil}
+            options={[{ value: '', label: 'All pupils' }, ...pupilOptions]}
+          />
           <label className="flex items-center gap-2 pb-2 text-sm text-ink2">
             <input type="checkbox" checked={anonymize} onChange={(e) => setAnonymize(e.target.checked)} />
             Anonymize names
           </label>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="btn-primary disabled:opacity-60" disabled={!!busy} onClick={() => save('sessions')}>
-            {busy === 'sessions' ? 'Preparing…' : 'Download rounds'}
-          </button>
-          <button className="btn-ghost disabled:opacity-60" disabled={!!busy} onClick={() => save('answers')}>
-            {busy === 'answers' ? 'Preparing…' : 'Download answers'}
-          </button>
+          <Button loading={busy === 'sessions'} disabled={!!busy} onClick={() => save('sessions')}>
+            Download rounds
+          </Button>
+          <Button variant="secondary" loading={busy === 'answers'} disabled={!!busy} onClick={() => save('answers')}>
+            Download answers
+          </Button>
         </div>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </div>
@@ -153,6 +177,9 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
             </tr>
           </thead>
           <tbody>
+            {klass.length === 0 ? (
+              <tr><td colSpan={2 + GAME_KEYS.length * LEVEL_KEYS.length}><EmptyState icon="🧒" title="Wala pang pupil" message="Mag-register ng pupil sa Pupils page." /></td></tr>
+            ) : null}
             {pager.rows.map((p) => (
               <tr key={p.id}>
                 <td className="td font-semibold">
@@ -199,7 +226,7 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
               <span className="whitespace-nowrap text-xs text-ink2">{m.wrong} wrong / {m.total}</span>
             </div>
           ))}
-          {missed.length === 0 ? <p className="py-6 text-center text-sm text-ink3">No missed items yet.</p> : null}
+          {missed.length === 0 ? <EmptyState icon="✅" title="No missed items yet." /> : null}
         </div>
       </section>
     </>
@@ -208,7 +235,7 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
 
 function PupilReport({ report }: { report: any }) {
   const pager = usePagination<any>(report?.history ?? [], [report?.id]);
-  if (!report) return <p className="text-sm text-ink3">Loading…</p>;
+  if (!report) return <section className="panel"><LoadingState message="Kinukuha ang report…" /></section>;
 
   return (
     <>
@@ -262,7 +289,7 @@ function PupilReport({ report }: { report: any }) {
                 <span className="text-xs text-ink2">{m.wrong} / {m.total}</span>
               </div>
             ))}
-            {report.missed.length === 0 ? <p className="py-6 text-center text-sm text-ink3">Nothing missed yet.</p> : null}
+            {report.missed.length === 0 ? <EmptyState icon="✅" title="Nothing missed yet." /> : null}
           </div>
         </section>
       </div>
@@ -293,7 +320,7 @@ function PupilReport({ report }: { report: any }) {
                 <td className="td text-right tabular-nums">{h.score}</td>
               </tr>
             ))}
-            {report.history.length === 0 ? <tr><td className="td py-8 text-center text-ink3" colSpan={7}>No rounds synced yet.</td></tr> : null}
+            {report.history.length === 0 ? <tr><td colSpan={7}><EmptyState icon="🎮" title="No rounds synced yet." /></td></tr> : null}
           </tbody>
         </table>
         <Pagination {...pager} />

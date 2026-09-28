@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/api';
+import { Button } from '@/components/ui/Button';
 
 const LETTERS = ['Aa', 'Bb', 'Kk', 'Dd', 'Ee', 'Gg', 'Hh', 'Ii', 'Ll', 'Mm', 'Nn', 'Ng', 'Oo', 'Pp', 'Rr', 'Ss', 'Tt', 'Uu', 'Ww', 'Yy'];
 
@@ -63,9 +64,9 @@ export default function LoginPage() {
 
           {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
 
-          <button className="btn-primary w-full justify-center" disabled={busy}>
-            {busy ? 'Logging in…' : 'Log in'}
-          </button>
+          <Button type="submit" className="w-full" loading={busy}>
+            Log in
+          </Button>
 
           <p className="rounded-lg bg-[#e6eefb] p-3 text-xs text-[#264a8a]">
             Demo account — username <code className="font-bold">teacher</code>, password{' '}

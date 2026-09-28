@@ -78,7 +78,7 @@ export async function download(path: string, fallbackName: string) {
       const data = await res.json();
       message = Array.isArray(data.message) ? data.message[0] : data.message ?? message;
     } catch {}
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
 
   const name = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? fallbackName;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { SelectField } from './ui/SelectField';
 
 const PAGE_SIZES = [10, 20, 30];
 
@@ -55,9 +56,13 @@ export function Pagination({ page, pageCount, pageSize, total, setPage, setPageS
   return (
     <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-3 text-sm">
       <span className="text-ink2">Showing {first}–{last} of {total}</span>
-      <select className="input w-auto py-1" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows per page">
-        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n} per page</option>)}
-      </select>
+      <SelectField
+        className="w-36"
+        aria-label="Rows per page"
+        value={String(pageSize)}
+        onChange={(v) => setPageSize(Number(v))}
+        options={PAGE_SIZES.map((n) => ({ value: String(n), label: `${n} per page` }))}
+      />
       {pageCount > 1 ? (
         <nav className="ml-auto flex flex-wrap items-center gap-1" aria-label="Pages">
           <button type="button" className="btn-ghost px-3 py-1 disabled:opacity-50" disabled={page === 1} onClick={() => setPage(page - 1)}>

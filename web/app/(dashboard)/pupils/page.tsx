@@ -4,40 +4,72 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Pagination, usePagination } from '@/components/Pagination';
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { toastError, toastSuccess } from '@/components/ui/toast';
 
 export default function PupilsPage() {
   const [pupils, setPupils] = useState<any[]>([]);
   const [form, setForm] = useState<{ id: number; name: string; section: string; loginCode: string } | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [opening, setOpening] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<number | null>(null);
   const pager = usePagination(pupils);
 
-  const load = () => api.pupils().then(setPupils).catch((e) => setError(e.message));
+  const load = () =>
+    api
+      .pupils()
+      .then(setPupils)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   useEffect(() => {
     load();
   }, []);
 
   async function openNew() {
-    const { code } = await api.newCode();
-    setForm({ id: 0, name: '', section: 'Sampaguita', loginCode: code });
+    setOpening(true);
+    try {
+      const { code } = await api.newCode();
+      setForm({ id: 0, name: '', section: 'Sampaguita', loginCode: code });
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setOpening(false);
+    }
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!form) return;
+    if (!form || saving) return;
+    setSaving(true);
     try {
       const body = { name: form.name.trim(), section: form.section, loginCode: form.loginCode };
       if (form.id) await api.updatePupil(form.id, body);
       else await api.createPupil(body);
+      toastSuccess(form.id ? 'Pupil updated' : 'Pupil added');
       setForm(null);
       load();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setSaving(false);
     }
   }
 
   async function toggle(p: any) {
-    await api.updatePupil(p.id, { name: p.name, active: !p.active });
-    load();
+    setToggling(p.id);
+    try {
+      await api.updatePupil(p.id, { name: p.name, active: !p.active });
+      toastSuccess(p.active ? 'Pupil deactivated' : 'Pupil activated');
+      await load();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setToggling(null);
+    }
   }
 
   return (
@@ -46,12 +78,18 @@ export default function PupilsPage() {
         <p className="flex-1 text-sm text-ink3">
           {pupils.filter((p) => p.active).length} active pupils. Deactivated pupils can&apos;t log in, but their results are kept.
         </p>
-        <button className="btn-primary" onClick={openNew}>+ Register pupil</button>
+        <Button onClick={openNew} loading={opening}>+ Register pupil</Button>
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <section className="panel overflow-x-auto">
+        {loading ? (
+          <LoadingState message="Kinukuha ang mga pupil…" />
+        ) : pupils.length === 0 ? (
+          <EmptyState icon="🧒" title="Wala pang pupil" message="Mag-register ng pupil para makapag-log in siya sa tablet." action={{ label: '+ Register pupil', onClick: openNew }} />
+        ) : (
+        <>
         <table className="w-full text-sm">
           <thead>
             <tr>
@@ -80,14 +118,17 @@ export default function PupilsPage() {
                 <td className="td whitespace-nowrap text-right">
                   <Link className="btn-ghost mr-1" href={`/reports?pupil=${p.id}`}>Report</Link>
                   <button className="btn-ghost mr-1" onClick={() => setForm({ id: p.id, name: p.name, section: p.section ?? '', loginCode: p.loginCode })}>Edit</button>
-                  <button className="btn-ghost" onClick={() => toggle(p)}>{p.active ? 'Deactivate' : 'Activate'}</button>
+                  <Button variant="secondary" loading={toggling === p.id} disabled={toggling !== null} onClick={() => toggle(p)}>
+                    {p.active ? 'Deactivate' : 'Activate'}
+                  </Button>
                 </td>
               </tr>
             ))}
-            {pupils.length === 0 ? <tr><td className="td py-8 text-center text-ink3" colSpan={7}>No pupils registered yet.</td></tr> : null}
           </tbody>
         </table>
         <Pagination {...pager} />
+        </>
+        )}
       </section>
 
       {form ? (
@@ -119,8 +160,8 @@ export default function PupilsPage() {
             </div>
 
             <footer className="flex justify-end gap-2 border-t border-line px-5 py-4">
-              <button type="button" className="btn-ghost" onClick={() => setForm(null)}>Cancel</button>
-              <button className="btn-primary">{form.id ? 'Save' : 'Register'}</button>
+              <Button type="button" variant="secondary" onClick={() => setForm(null)}>Cancel</Button>
+              <Button type="submit" loading={saving}>{form.id ? 'Save' : 'Register'}</Button>
             </footer>
           </form>
         </div>

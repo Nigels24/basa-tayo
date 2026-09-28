@@ -1,8 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError, GAME_KEYS, GAME_NAMES, LEVEL_KEYS, LEVEL_NAMES, THEME_NAMES } from '@/lib/api';
 import { Pagination, usePagination } from '@/components/Pagination';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { SelectField } from '@/components/ui/SelectField';
+import { SearchIcon, TextInput } from '@/components/ui/TextInput';
+import { toastError, toastSuccess } from '@/components/ui/toast';
 
 // Picture choices for Grade 1 nouns. Mostly older emoji that every Android tablet
 // shows; the newer ones (🦷 🧹 Android 9+, 🧊 Android 10+, 🪨 🪴 🪟 Android 11+)
@@ -16,6 +23,18 @@ const EMOJI_GROUPS: { name: string; emoji: string[] }[] = [
 ];
 const GRID_EMOJI = new Set(EMOJI_GROUPS.flatMap((g) => g.emoji));
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' }); // 👨‍👩‍👧, 👋🏽 and flags count as one
+
+const SORTS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'az', label: 'A–Z' },
+  { value: 'za', label: 'Z–A' },
+];
+const THEME_OPTIONS = Object.entries(THEME_NAMES).map(([k, v]) => ({ value: k, label: `${k} — ${v}` }));
+const LEVEL_OPTIONS = LEVEL_KEYS.map((l) => ({ value: l, label: LEVEL_NAMES[l] }));
+
+/** Lower-case, without dashes, dots and spaces, so "pa-ru" and "paru" both find paruparo. */
+const squash = (s: string) => s.toLowerCase().replace(/[-·\s]+/g, '');
 
 const empty = {
   id: 0,
@@ -31,7 +50,11 @@ const empty = {
 
 export default function WordsPage() {
   const [words, setWords] = useState<any[]>([]);
-  const [q, setQ] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState(''); // search, debounced
+  const [sort, setSort] = useState('newest');
+  const [theme, setTheme] = useState('');
   const [level, setLevel] = useState('');
   const [gameType, setGameType] = useState('');
   const [form, setForm] = useState<typeof empty | null>(null);
@@ -40,21 +63,51 @@ export default function WordsPage() {
   const [emojiError, setEmojiError] = useState('');
   const [wordError, setWordError] = useState(''); // e.g. 409: the word is already in the bank
   const [saving, setSaving] = useState(false);
-  const pager = usePagination(words, [q, level, gameType]);
+  const [toDelete, setToDelete] = useState<{ id: number; word: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const load = () => {
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    if (level) params.set('level', level);
-    if (gameType) params.set('gameType', gameType);
-    const query = params.toString();
-    api.words(query ? `?${query}` : '')
-      .then((ws: any[]) => setWords(ws.filter((w) => w.active))) // deleted words are kept only for past results.catch((e) => setError(e.message));
-  };
+  // Search, filters and sort run here on the loaded list; pagination runs on the result.
+  const shown = useMemo(() => {
+    const needle = squash(q);
+    const list = words.filter(
+      (w) =>
+        (!needle || squash(w.filipinoWord).includes(needle) || squash(w.syllables.join('')).includes(needle)) &&
+        (!theme || w.theme === theme) &&
+        (!level || w.level === level) &&
+        (!gameType || w.gameWords?.some((gw: any) => gw.game.gameType === gameType)),
+    );
+    const byDate = (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id;
+    const byWord = (a: any, b: any) => a.filipinoWord.localeCompare(b.filipinoWord, 'fil');
+    const order = { newest: (a: any, b: any) => byDate(b, a), oldest: byDate, az: byWord, za: (a: any, b: any) => byWord(b, a) }[sort] ?? byDate;
+    return list.sort(order);
+  }, [words, q, theme, level, gameType, sort]);
+  const pager = usePagination(shown, [q, sort, theme, level, gameType]);
+  const filtered = !!(search || theme || level || gameType || sort !== 'newest');
+
+  const load = () =>
+    api
+      .words()
+      .then((ws: any[]) => setWords(ws.filter((w) => w.active))) // deleted words are kept only for past results
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     load();
-  }, [q, level, gameType]);
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  function clearFilters() {
+    setSearch('');
+    setQ('');
+    setSort('newest');
+    setTheme('');
+    setLevel('');
+    setGameType('');
+  }
 
   /** Open the form; a picture that is not in the grid goes into the "Ibang emoji" box. */
   function openForm(f: typeof empty) {
@@ -93,40 +146,68 @@ export default function WordsPage() {
     try {
       if (form.id) await api.updateWord(form.id, body);
       else await api.createWord(body);
+      toastSuccess(form.id ? 'Word updated' : 'Word added');
       setForm(null);
       load();
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) setWordError(err.message);
-      else setError(err.message);
+      else toastError(err);
     } finally {
       setSaving(false);
     }
   }
 
-  async function remove(id: number, word: string) {
-    if (!confirm(`Remove "${word}" from the word bank? Past results are kept.`)) return;
-    await api.deleteWord(id);
-    load();
+  async function remove() {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await api.deleteWord(toDelete.id);
+      toastSuccess('Word deleted');
+      setToDelete(null);
+      load();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <input className="input max-w-xs" placeholder="Search words" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input w-auto" value={gameType} onChange={(e) => setGameType(e.target.value)}>
-          <option value="">All mini-games</option>
-          {GAME_KEYS.map((g) => <option key={g} value={g}>{GAME_NAMES[g]}</option>)}
-        </select>
-        <select className="input w-auto" value={level} onChange={(e) => setLevel(e.target.value)}>
-          <option value="">All levels</option>
-          {LEVEL_KEYS.map((l) => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}
-        </select>
-        <button className="btn-primary ml-auto" onClick={() => openForm({ ...empty })}>+ Add word</button>
+        <TextInput
+          className="min-w-0 flex-[1_1_16rem]"
+          type="search"
+          aria-label="Hanapin ang salita"
+          placeholder="Hanapin ang salita…"
+          icon={<SearchIcon />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <SelectField className="w-full sm:w-40" aria-label="Sort" value={sort} onChange={setSort} options={SORTS} />
+        <SelectField className="w-full sm:w-52" aria-label="Theme" value={theme} onChange={setTheme} options={[{ value: '', label: 'All themes' }, ...THEME_OPTIONS]} />
+        <SelectField className="w-full sm:w-40" aria-label="Level" value={level} onChange={setLevel} options={[{ value: '', label: 'All levels' }, ...LEVEL_OPTIONS]} />
+        <SelectField
+          className="w-full sm:w-48"
+          aria-label="Mini-game"
+          value={gameType}
+          onChange={setGameType}
+          options={[{ value: '', label: 'All mini-games' }, ...GAME_KEYS.map((g) => ({ value: g, label: GAME_NAMES[g] }))]}
+        />
+        <Button className="w-full sm:ml-auto sm:w-auto" onClick={() => openForm({ ...empty })}>+ Add word</Button>
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <section className="panel overflow-x-auto">
+        {loading ? (
+          <LoadingState message="Kinukuha ang mga salita…" />
+        ) : words.length === 0 ? (
+          <EmptyState icon="📚" title="Wala pang salita" message="Idagdag ang unang salita sa Word Bank." action={{ label: '+ Add word', onClick: () => openForm({ ...empty }) }} />
+        ) : shown.length === 0 ? (
+          <EmptyState icon="🔍" title="Walang tugmang salita" message="Subukan ang ibang salita o filter." action={{ label: 'Clear filters', onClick: clearFilters }} />
+        ) : (
+        <>
         <table className="w-full text-sm">
           <thead>
             <tr>
@@ -176,17 +257,26 @@ export default function WordsPage() {
                   >
                     Edit
                   </button>
-                  <button className="btn-ghost" onClick={() => remove(w.id, w.filipinoWord)}>Delete</button>
+                  <button className="btn-ghost" onClick={() => setToDelete({ id: w.id, word: w.filipinoWord })}>Delete</button>
                 </td>
               </tr>
             ))}
-            {words.length === 0 ? (
-              <tr><td className="td py-8 text-center text-ink3" colSpan={7}>No words match these filters.</td></tr>
-            ) : null}
           </tbody>
         </table>
         <Pagination {...pager} />
+        </>
+        )}
       </section>
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title={`Burahin ang "${toDelete?.word ?? ''}"?`}
+        message="Mawawala ito sa Word Bank at sa mga laro. Mananatili ang mga nakaraang resulta."
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={remove}
+        onClose={() => setToDelete(null)}
+      />
 
       {form ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && setForm(null)}>
@@ -277,18 +367,8 @@ export default function WordsPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="label">Quarterly theme</label>
-                  <select className="input" value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value })}>
-                    {Object.entries(THEME_NAMES).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Level</label>
-                  <select className="input" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
-                    {LEVEL_KEYS.map((l) => <option key={l} value={l}>{LEVEL_NAMES[l]}</option>)}
-                  </select>
-                </div>
+                <SelectField label="Quarterly theme" value={form.theme} onChange={(v) => setForm({ ...form, theme: v })} options={THEME_OPTIONS} />
+                <SelectField label="Level" value={form.level} onChange={(v) => setForm({ ...form, level: v })} options={LEVEL_OPTIONS} />
               </div>
 
               <div>
@@ -310,12 +390,11 @@ export default function WordsPage() {
                 </div>
               </div>
 
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
             </div>
 
             <footer className="flex justify-end gap-2 border-t border-line px-5 py-4">
-              <button type="button" className="btn-ghost" onClick={() => setForm(null)}>Cancel</button>
-              <button className="btn-primary disabled:opacity-60" disabled={saving}>{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add word'}</button>
+              <Button type="button" variant="secondary" onClick={() => setForm(null)}>Cancel</Button>
+              <Button type="submit" loading={saving}>{form.id ? 'Save changes' : 'Add word'}</Button>
             </footer>
           </form>
         </div>

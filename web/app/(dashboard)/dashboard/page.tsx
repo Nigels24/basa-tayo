@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, GAME_NAMES, LEVEL_NAMES } from '@/lib/api';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<any>(null);
@@ -21,7 +23,7 @@ export default function Dashboard() {
   }, []);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
-  if (!summary) return <p className="text-sm text-ink3">Loading…</p>;
+  if (!summary) return <section className="panel"><LoadingState message="Kinukuha ang dashboard…" /></section>;
 
   const maxWrong = Math.max(1, ...missed.map((m) => m.wrong));
 
@@ -44,7 +46,7 @@ export default function Dashboard() {
             <Link className="btn-ghost" href="/reports">Full report</Link>
           </div>
           <div className="grid gap-3 p-5">
-            {missed.length === 0 ? <p className="py-6 text-center text-sm text-ink3">No missed items yet.</p> : null}
+            {missed.length === 0 ? <EmptyState icon="✅" title="No missed items yet." /> : null}
             {missed.map((m) => (
               <div key={m.gameType + m.prompt} className="grid grid-cols-[34px_1fr_auto] items-center gap-3">
                 <span className="text-2xl">{m.emoji ?? '❓'}</span>
@@ -66,7 +68,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold">Recent activity</h2>
           </div>
           <div className="px-5">
-            {recent.length === 0 ? <p className="py-6 text-center text-sm text-ink3">No rounds played yet.</p> : null}
+            {recent.length === 0 ? <EmptyState icon="🎮" title="No rounds played yet." /> : null}
             {recent.map((r, i) => (
               <div key={i} className="flex items-center justify-between gap-3 border-b border-[#eef1f6] py-3 text-sm last:border-0">
                 <div>

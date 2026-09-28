@@ -29,7 +29,7 @@ export class WordsService {
     // past results stay linked to the same word.
     const deleted = await this.prisma.word.findFirst({ where: { filipinoWord, active: false } });
     if (deleted) {
-      const word = await this.prisma.word.update({ where: { id: deleted.id }, data: { ...wordData(dto), active: true } });
+      const word = await this.prisma.word.update({ where: { id: deleted.id }, data: { ...wordData(dto), active: true, createdAt: new Date() } }); // counts as newest in the Word Bank
       await this.prisma.gameWord.deleteMany({ where: { wordId: word.id } });
       await this.assignGames(word.id, dto.level as Level, dto.gameTypes as GameType[]);
       return word;
