@@ -407,7 +407,7 @@ export default function WordsPage() {
                         setForm({ ...form, emoji: e.target.value });
                         setEmojiError('');
                       }}
-                      placeholder="🦋"
+                      placeholder="hal. i-paste ang emoji dito"
                     />
                     <p className="mt-1 text-xs text-ink3">
                       Kung wala sa listahan, i-paste dito. Ang ilang bagong emoji ay maaaring hindi lumabas sa lumang Android.
