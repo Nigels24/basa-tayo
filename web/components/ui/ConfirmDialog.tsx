@@ -10,12 +10,14 @@ type Props = {
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  /** danger for deletes (default); primary for non-destructive actions such as logging out. */
+  variant?: 'danger' | 'primary';
   onConfirm: () => void;
   onClose: () => void;
 };
 
-/** Confirmation for destructive actions. Esc or Cancel closes it; focus stays inside while open. */
-export function ConfirmDialog({ open, title, message, confirmLabel = 'Delete', cancelLabel = 'Cancel', loading = false, onConfirm, onClose }: Props) {
+/** Confirmation dialog. Esc or Cancel closes it; Cancel gets the first focus and focus stays inside while open. */
+export function ConfirmDialog({ open, title, message, confirmLabel = 'Delete', cancelLabel = 'Cancel', loading = false, variant = 'danger', onConfirm, onClose }: Props) {
   return (
     <Dialog open={open} onClose={() => !loading && onClose()} className="relative z-50">
       <DialogBackdrop className="fixed inset-0 bg-black/40" />
@@ -26,8 +28,8 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Delete', c
             {message ? <Description className="text-sm text-ink2">{message}</Description> : null}
           </div>
           <div className="flex justify-end gap-2 border-t border-line px-5 py-4">
-            <Button variant="secondary" onClick={onClose} disabled={loading}>{cancelLabel}</Button>
-            <Button variant="danger" onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+            <Button variant="secondary" onClick={onClose} disabled={loading} data-autofocus>{cancelLabel}</Button>
+            <Button variant={variant} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
           </div>
         </DialogPanel>
       </div>

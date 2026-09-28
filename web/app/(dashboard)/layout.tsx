@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getTeacher, getToken, logout } from '@/lib/api';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -17,6 +18,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [teacher, setTeacher] = useState<any>(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     if (!getToken()) router.replace('/login');
@@ -57,13 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <strong className="block text-sm">{teacher?.name ?? ''}</strong>
               <small className="text-xs text-ink3">{teacher?.school ?? ''}</small>
             </div>
-            <button
-              className="btn-ghost"
-              onClick={() => {
-                logout();
-                router.replace('/login');
-              }}
-            >
+            <button className="btn-ghost" onClick={() => setConfirmLogout(true)}>
               Log out
             </button>
           </div>
@@ -71,6 +68,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <main className="grid gap-5 p-6">{children}</main>
       </div>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Mag-log out?"
+        message="Kailangan mong mag-log in muli para magamit ang Teacher Module."
+        confirmLabel="Log out"
+        variant="primary"
+        loading={leaving}
+        onClose={() => setConfirmLogout(false)}
+        onConfirm={() => {
+          setLeaving(true); // stays loading until the login page replaces this layout
+          logout();
+          router.replace('/login');
+        }}
+      />
     </div>
   );
 }
