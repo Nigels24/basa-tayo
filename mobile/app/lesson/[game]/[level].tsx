@@ -30,9 +30,11 @@ export default function LessonScreen() {
     bundle?.lessons.find((l) => l.gameType === game && l.level === level);
   const example = bundle?.words.find((w) => w.id === lesson?.exampleWordId);
 
+  // The example word's recording when it has one; otherwise (or if it can't play) the lesson is read aloud as before.
+  const readLesson = () => sound.speak(lesson?.say || lesson?.target || '', 0.7);
   const say = () => {
-    if (example?.audioUrl) sound.playWord(example);
-    else sound.speak(lesson?.say || lesson?.target || '', 0.7);
+    if (example?.audioUrl) sound.playWord(example, readLesson);
+    else readLesson();
   };
 
   useEffect(() => {

@@ -7,6 +7,7 @@
  *             pupil who played them so a shared tablet never mixes pupils up.
  *  progress — each pupil's stars, highest scores and badges under progress:<pupilId>,
  *             so the home screen works offline without showing another pupil's numbers.
+ *  media    — which pictures and recordings are downloaded (see media.ts).
  */
 import * as SQLite from 'expo-sqlite';
 import { api } from './api';
@@ -52,6 +53,9 @@ async function get<T>(key: string): Promise<T | null> {
   return row ? (JSON.parse(row.value) as T) : null;
 }
 
+/** Plain key/value access for other cache users (media.ts). */
+export const kv = { get, put };
+
 export interface CachedWord {
   id: number;
   word: string;
@@ -91,14 +95,17 @@ export interface Bundle {
 }
 
 export const cache = {
-  /** Download the content and keep it for offline play. Falls back to what's stored. */
-  async refresh(): Promise<Bundle | null> {
+  /**
+   * Download the content and keep it for offline play. Falls back to what's
+   * stored; `fresh` says whether the bundle came from the API just now.
+   */
+  async refresh(): Promise<{ bundle: Bundle | null; fresh: boolean }> {
     try {
       const bundle = (await api.bundle()) as Bundle;
       await put('bundle', bundle);
-      return bundle;
+      return { bundle, fresh: true };
     } catch {
-      return get<Bundle>('bundle');
+      return { bundle: await get<Bundle>('bundle'), fresh: false };
     }
   },
 

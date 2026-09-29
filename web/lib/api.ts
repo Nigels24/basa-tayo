@@ -98,6 +98,7 @@ export const api = {
   createWord: (body: any) => request('/words', { method: 'POST', body }),
   updateWord: (id: number, body: any) => request(`/words/${id}`, { method: 'PATCH', body }),
   deleteWord: (id: number) => request(`/words/${id}`, { method: 'DELETE' }),
+  mediaSignature: (kind: 'image' | 'audio') => request('/media/signature', { method: 'POST', body: { kind } }),
 
   // lessons
   lessons: () => request('/lessons'),

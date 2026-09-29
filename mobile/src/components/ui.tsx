@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { colors, radius } from '../theme';
 import type { CachedWord } from '../lib/db';
+import { media } from '../lib/media';
 
 /** Big chunky button — the main touch target for six-year-olds. */
 export function BigButton({ label, onPress, color = colors.green, shadow = colors.greenDeep, labelColor = '#fff', disabled, style }: {
@@ -29,11 +30,25 @@ export function BigButton({ label, onPress, color = colors.green, shadow = color
   );
 }
 
-/** The word's picture: an uploaded image, or the emoji placeholder. */
+/**
+ * The word's picture: the downloaded copy of the uploaded image, else the
+ * image online, else the emoji. An image that won't load (offline, broken
+ * link) shows the emoji instead.
+ */
 export function Picture({ word, size = 110 }: { word?: Pick<CachedWord, 'emoji' | 'imageUrl' | 'word'>; size?: number }) {
+  const [failed, setFailed] = useState<string | null>(null); // the uri that failed to load
   if (!word) return null;
-  if (word.imageUrl) {
-    return <Image source={{ uri: word.imageUrl }} style={{ width: size, height: size, borderRadius: radius.sm }} resizeMode="contain" accessibilityLabel={word.word} />;
+  const uri = word.imageUrl ? media.localUri(word.imageUrl) ?? word.imageUrl : null;
+  if (uri && uri !== failed) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: radius.sm }}
+        resizeMode="contain"
+        accessibilityLabel={word.word}
+        onError={() => setFailed(uri)}
+      />
+    );
   }
   return <Text style={{ fontSize: size * 0.8, lineHeight: size * 1.05, color: colors.ink }} accessibilityLabel={word.word}>{word.emoji ?? '❓'}</Text>;
 }

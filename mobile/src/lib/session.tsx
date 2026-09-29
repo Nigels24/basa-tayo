@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState } from 'react-native';
 import { api, Pupil } from './api';
 import { Bundle, EarnedBadge, Progress, SyncResult, cache, emptyProgress, outbox } from './db';
+import { media } from './media';
 import { GameType, Level } from './game-config';
 
 /** What the results screen shows: the device's estimate, plus the server's scoring once synced. */
@@ -61,9 +62,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refresh = useCallback(async () => {
-    const [b, , n] = await Promise.all([cache.refresh(), loadProgress(), outbox.count()]);
+    const [{ bundle: b, fresh }, , n] = await Promise.all([cache.refresh(), loadProgress(), outbox.count(), media.load()]);
     setBundle(b);
     setPending(n);
+    if (fresh && b) media.sync(b); // pictures and recordings download in the background, never awaited
   }, []);
 
   useEffect(() => {

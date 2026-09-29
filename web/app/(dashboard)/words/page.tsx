@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { SelectField } from '@/components/ui/SelectField';
 import { SearchIcon, TextInput } from '@/components/ui/TextInput';
 import { toastError, toastSuccess } from '@/components/ui/toast';
+import { AudioUpload, PictureUpload, PlayButton } from '@/components/MediaUpload';
 import { EMOJI_GROUPS, GRID_EMOJI, PickEmoji, emojiNeedle, loadMoreEmoji, searchCurated, searchMore } from '@/lib/emoji-list';
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' }); // 👨‍👩‍👧, 👋🏽 and flags count as one
@@ -56,6 +57,8 @@ export default function WordsPage() {
   const [morePictures, setMorePictures] = useState<PickEmoji[] | null>(null); // null while the full list loads
   const [wordError, setWordError] = useState(''); // e.g. 409: the word is already in the bank
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState({ image: false, audio: false }); // Save waits for uploads
+  const busyUploading = uploading.image || uploading.audio;
   const [toDelete, setToDelete] = useState<{ id: number; word: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -135,6 +138,7 @@ export default function WordsPage() {
     setError('');
     setPictureSearch('');
     setPictureQ('');
+    setUploading({ image: false, audio: false });
   }
 
   /** Grid and search results pick the picture the same way; the "Ibang emoji" box is cleared. */
@@ -160,7 +164,7 @@ export default function WordsPage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!form || saving) return;
+    if (!form || saving || busyUploading) return;
     setError('');
     setWordError('');
     const emoji = form.emoji.trim();
@@ -179,8 +183,8 @@ export default function WordsPage() {
       level: form.level,
       gameTypes: form.gameTypes,
       emoji,
-      imageUrl: form.imageUrl || undefined,
-      audioUrl: form.audioUrl || undefined,
+      imageUrl: form.imageUrl, // empty clears it
+      audioUrl: form.audioUrl,
     };
     setSaving(true);
     try {
@@ -265,7 +269,11 @@ export default function WordsPage() {
               <tr key={w.id}>
                 <td className="td">
                   <span className="flex items-center gap-3">
-                    <span className="h-8 w-8 shrink-0 overflow-hidden whitespace-nowrap text-center text-2xl leading-8">{w.emoji ?? '❓'}</span>
+                    {w.imageUrl ? (
+                      <img src={w.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" loading="lazy" />
+                    ) : (
+                      <span className="h-8 w-8 shrink-0 overflow-hidden whitespace-nowrap text-center text-2xl leading-8">{w.emoji ?? '❓'}</span>
+                    )}
                     <b className="text-base">{w.filipinoWord}</b>
                   </span>
                 </td>
@@ -279,7 +287,16 @@ export default function WordsPage() {
                     ))}
                   </span>
                 </td>
-                <td className="td text-ink3">{w.audioUrl ? 'Recording' : 'Text-to-speech'}</td>
+                <td className="td text-ink3">
+                  {w.audioUrl ? (
+                    <span className="flex items-center gap-2">
+                      <PlayButton url={w.audioUrl} label={w.filipinoWord} />
+                      Recording
+                    </span>
+                  ) : (
+                    'Text-to-speech'
+                  )}
+                </td>
                 <td className="td text-right whitespace-nowrap">
                   <button
                     className="btn-ghost mr-2"
@@ -348,7 +365,7 @@ export default function WordsPage() {
               </div>
 
               <div>
-                <label className="label" htmlFor="picture-search">Picture</label>
+                <label className="label" htmlFor="picture-search">Emoji (required)</label>
                 <TextInput
                   id="picture-search"
                   className="mb-2"
@@ -415,12 +432,25 @@ export default function WordsPage() {
                     {emojiError ? <p className="mt-1 text-sm text-red-600">{emojiError}</p> : null}
                   </div>
                 </div>
-                <input className="input mt-2" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="Cloudinary image URL (optional)" />
               </div>
 
               <div>
-                <label className="label">Pronunciation recording</label>
-                <input className="input" value={form.audioUrl} onChange={(e) => setForm({ ...form, audioUrl: e.target.value })} placeholder="Cloudinary audio URL (optional — text-to-speech is used without it)" />
+                <label className="label">Larawan (optional)</label>
+                <PictureUpload
+                  value={form.imageUrl}
+                  onChange={(imageUrl) => setForm((f) => f && { ...f, imageUrl })}
+                  onBusyChange={(image) => setUploading((u) => ({ ...u, image }))}
+                />
+                <p className="mt-1 text-xs text-ink3">Ang emoji ay ginagamit kapag walang larawan o hindi ma-download.</p>
+              </div>
+
+              <div>
+                <label className="label">Bigkas (optional)</label>
+                <AudioUpload
+                  value={form.audioUrl}
+                  onChange={(audioUrl) => setForm((f) => f && { ...f, audioUrl })}
+                  onBusyChange={(audio) => setUploading((u) => ({ ...u, audio }))}
+                />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -451,7 +481,9 @@ export default function WordsPage() {
 
             <footer className="flex justify-end gap-2 border-t border-line px-5 py-4">
               <Button type="button" variant="secondary" onClick={() => setForm(null)}>Cancel</Button>
-              <Button type="submit" loading={saving}>{form.id ? 'Save changes' : 'Add word'}</Button>
+              <Button type="submit" loading={saving} disabled={busyUploading} title={busyUploading ? 'Hintayin matapos ang upload' : undefined}>
+                {form.id ? 'Save changes' : 'Add word'}
+              </Button>
             </footer>
           </form>
         </div>

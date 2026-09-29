@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { GameType, Level, Prisma, Theme } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { WordDto } from './dto';
+import { isOurCloudinaryUrl } from '../common/cloudinary';
 
 @Injectable()
 export class WordsService {
@@ -23,6 +24,7 @@ export class WordsService {
   async create(teacherId: number, dto: WordDto) {
     this.checkSyllables(dto);
     this.checkEmoji(dto);
+    this.checkMedia(dto);
     const filipinoWord = dto.word.toLowerCase();
 
     // Re-adding a deleted word brings its row back with the new values, so
@@ -47,6 +49,7 @@ export class WordsService {
     const exists = await this.prisma.word.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Word not found');
     this.checkEmoji(dto);
+    this.checkMedia(dto);
 
     // Renaming onto a deleted word's name would clash with its hidden row; say so instead of merging.
     const clash = await this.prisma.word.findFirst({ where: { filipinoWord: dto.word.toLowerCase(), id: { not: id }, active: false } });
@@ -80,6 +83,13 @@ export class WordsService {
     }
   }
 
+  /** Pictures and recordings must come from our own Cloudinary account (uploaded through the Word Bank). */
+  private checkMedia(dto: WordDto) {
+    for (const url of [dto.imageUrl, dto.audioUrl]) {
+      if (url && !isOurCloudinaryUrl(url)) throw new BadRequestException('Hindi wastong link ng larawan/audio.');
+    }
+  }
+
   /** A word belongs to the mini-games the teacher ticked, at its own level. */
   private async assignGames(wordId: number, level: Level, gameTypes: GameType[]) {
     for (const gameType of gameTypes) {
@@ -107,8 +117,8 @@ function wordData(dto: WordDto) {
     theme: dto.theme as Theme,
     level: dto.level as Level,
     emoji: dto.emoji,
-    imageUrl: dto.imageUrl,
-    audioUrl: dto.audioUrl,
+    imageUrl: dto.imageUrl || null, // empty clears it: the teacher removed the picture
+    audioUrl: dto.audioUrl || null,
   };
 }
 
