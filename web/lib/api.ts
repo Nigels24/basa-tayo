@@ -118,7 +118,8 @@ export const api = {
   classScores: () => request('/reports/class'),
   recent: () => request('/reports/recent'),
   missed: (limit = 8) => request(`/reports/missed?limit=${limit}`),
-  pupilReport: (id: number) => request(`/reports/pupil/${id}`),
+  /** query is '' or '?from=YYYY-MM-DD&to=YYYY-MM-DD' (either date may be left out). */
+  pupilReport: (id: number, query = '') => request(`/reports/pupil/${id}${query}`),
   exportCsv: (kind: 'sessions' | 'answers', query: string) =>
     download(`/reports/export/${kind}.csv${query}`, `basa-tayo-${kind}.csv`),
 };

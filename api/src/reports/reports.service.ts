@@ -1,10 +1,98 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { GameType, Level, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { manilaDateTime, toCsv } from './csv';
 
 /** from is inclusive, to is exclusive (the start of the day after the chosen end date). */
-export type ExportFilter = { from?: Date; to?: Date; pupilId?: number; anonymize: boolean };
+export type DayRange = { from?: Date; to?: Date };
+export type ExportFilter = DayRange & { pupilId?: number; anonymize: boolean };
+
+type AnswerRow = {
+  prompt: string;
+  isCorrect: boolean;
+  gameType: GameType;
+  word: { filipinoWord: string; emoji: string | null; imageUrl: string | null } | null;
+};
+
+const GAME_ORDER: GameType[] = ['TITIK', 'LARAWAN', 'BUUIN'];
+const LEVEL_ORDER: Level[] = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
+
+function playedAtFilter(range: DayRange): Prisma.DateTimeFilter {
+  const playedAt: Prisma.DateTimeFilter = {};
+  if (range.from) playedAt.gte = range.from;
+  if (range.to) playedAt.lt = range.to;
+  return playedAt;
+}
+
+/** Wrong and total answers per mini-game and prompt; only items missed at least once, most missed first. */
+function tallyMissed(answers: AnswerRow[]) {
+  const tally = new Map<string, { prompt: string; gameType: string; word?: string; emoji?: string; imageUrl?: string; wrong: number; total: number }>();
+  for (const a of answers) {
+    const key = `${a.gameType}|${a.prompt}`;
+    const row = tally.get(key) ?? {
+      prompt: a.prompt,
+      gameType: a.gameType,
+      word: a.word?.filipinoWord,
+      emoji: a.word?.emoji ?? undefined,
+      imageUrl: a.word?.imageUrl ?? undefined,
+      wrong: 0,
+      total: 0,
+    };
+    row.total++;
+    if (!a.isCorrect) row.wrong++;
+    tally.set(key, row);
+  }
+
+  return [...tally.values()]
+    .filter((r) => r.wrong > 0)
+    .sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total);
+}
+
+/** Missed items grouped by mini-game, then level; words sorted by wrong count, then A–Z. */
+function missedByCategory(answers: (AnswerRow & { level: Level })[]) {
+  const groups = GAME_ORDER.flatMap((gameType) =>
+    LEVEL_ORDER.map((level) => ({
+      gameType,
+      level,
+      words: tallyMissed(answers.filter((a) => a.gameType === gameType && a.level === level))
+        .map(({ prompt, word, emoji, imageUrl, wrong, total }) => ({ prompt, word, emoji, imageUrl, wrong, total }))
+        .sort((a, b) => b.wrong - a.wrong || a.prompt.localeCompare(b.prompt)),
+    })),
+  );
+  return groups.filter((g) => g.words.length > 0);
+}
+
+/**
+ * Highest score per mini-game and level from a set of rounds, by the same rule
+ * as the scores table: a later round replaces the best only with more points.
+ */
+function bestPerGame(sessions: { game: { gameType: GameType }; level: Level; score: number; stars: number; playedAt: Date; id: number }[]) {
+  const oldestFirst = [...sessions].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime() || a.id - b.id);
+  const best = new Map<string, { gameType: GameType; level: Level; highestScore: number; stars: number }>();
+  for (const s of oldestFirst) {
+    const key = `${s.game.gameType}|${s.level}`;
+    const prev = best.get(key);
+    if (!prev || s.score > prev.highestScore) {
+      best.set(key, { gameType: s.game.gameType, level: s.level, highestScore: s.score, stars: s.stars });
+    }
+  }
+  return [...best.values()];
+}
+
+/**
+ * The right answer for one item. It is not stored on its own: for Larawan and
+ * Buuin it is the target word; for Titik it is the letter shown in the prompt
+ * ("B — bahay", or the capitalised ending in "araW (dulo)").
+ */
+function expectedAnswer(gameType: GameType, prompt: string, word?: string): string | null {
+  if (gameType === 'TITIK') {
+    const first = prompt.match(/^(\S+) — /);
+    if (first) return first[1];
+    const last = prompt.match(/([A-ZÑ]+) \(dulo\)$/);
+    return last ? last[1] : null;
+  }
+  return word ?? prompt;
+}
 
 @Injectable()
 export class ReportsService {
@@ -53,32 +141,56 @@ export class ReportsService {
     }));
   }
 
-  /** One pupil: rounds, accuracy, stars, badges and round history. */
-  async pupil(teacherId: number, pupilId: number) {
+  /**
+   * One pupil: rounds, accuracy, stars, badges, highest scores, missed words
+   * and round history with each round's answers. With a range, everything but
+   * badges comes from the rounds played in it; badges are always all time.
+   */
+  async pupil(teacherId: number, pupilId: number, range: DayRange = {}) {
+    const ranged = !!(range.from || range.to);
     const pupil = await this.prisma.user.findFirst({
       where: { id: pupilId, teacherId, role: 'PUPIL' },
       include: {
         badges: true,
         scores: { include: { game: { select: { gameType: true } } } },
-        sessions: { include: { game: { select: { gameType: true } } }, orderBy: { playedAt: 'desc' }, take: 50 },
       },
     });
     if (!pupil) return null;
 
-    const avgAccuracy = pupil.sessions.length
-      ? Math.round(pupil.sessions.reduce((a, s) => a + s.accuracy, 0) / pupil.sessions.length)
+    const sessions = await this.prisma.gameSession.findMany({
+      where: { pupilId, playedAt: playedAtFilter(range) },
+      include: {
+        game: { select: { gameType: true } },
+        answers: { include: { word: { select: { filipinoWord: true, emoji: true, imageUrl: true } } }, orderBy: { id: 'asc' } },
+      },
+      orderBy: [{ playedAt: 'desc' }, { id: 'desc' }],
+    });
+
+    const avgAccuracy = sessions.length
+      ? Math.round(sessions.reduce((a, s) => a + s.accuracy, 0) / sessions.length)
       : 0;
+
+    // All time: the scores table. In a range: the same rule over that range's
+    // rounds — the first round with the highest points per mini-game and level.
+    const scores = ranged
+      ? bestPerGame(sessions)
+      : pupil.scores.map((s) => ({ gameType: s.game.gameType, level: s.level, highestScore: s.highestScore, stars: s.stars }));
+
+    const answers = sessions.flatMap((s) => s.answers.map((a) => ({ ...a, gameType: s.game.gameType, level: s.level })));
 
     return {
       id: pupil.id,
       name: pupil.name,
       section: pupil.section,
       loginCode: pupil.loginCode,
+      range: { from: range.from ?? null, to: range.to ?? null }, // to is exclusive
+      rounds: sessions.length,
       avgAccuracy,
-      stars: pupil.scores.reduce((a, s) => a + s.stars, 0),
+      stars: scores.reduce((a, s) => a + s.stars, 0),
       badges: pupil.badges.map((b) => ({ key: b.badgeKey, name: b.name, earnedAt: b.earnedAt })),
-      scores: pupil.scores.map((s) => ({ gameType: s.game.gameType, level: s.level, highestScore: s.highestScore, stars: s.stars })),
-      history: pupil.sessions.map((s) => ({
+      badgesAllTime: true,
+      scores,
+      history: sessions.map((s) => ({
         id: s.id,
         gameType: s.game.gameType,
         level: s.level,
@@ -88,8 +200,17 @@ export class ReportsService {
         stars: s.stars,
         score: s.score,
         playedAt: s.playedAt,
+        answers: s.answers.map((a) => ({
+          prompt: a.prompt,
+          word: a.word?.filipinoWord ?? null,
+          emoji: a.word?.emoji ?? null,
+          isCorrect: a.isCorrect,
+          given: a.givenAnswer || null,
+          expected: expectedAnswer(s.game.gameType, a.prompt, a.word?.filipinoWord),
+        })),
       })),
-      missed: await this.missedItems(teacherId, pupilId),
+      missed: tallyMissed(answers).slice(0, 10),
+      missedByCategory: missedByCategory(answers),
     };
   }
 
@@ -106,28 +227,7 @@ export class ReportsService {
       select: { prompt: true, isCorrect: true, word: { select: { filipinoWord: true, emoji: true, imageUrl: true } }, session: { select: { game: { select: { gameType: true } } } } },
     });
 
-    const tally = new Map<string, { prompt: string; gameType: string; word?: string; emoji?: string; imageUrl?: string; wrong: number; total: number }>();
-    for (const a of answers) {
-      const gameType = a.session.game.gameType;
-      const key = `${gameType}|${a.prompt}`;
-      const row = tally.get(key) ?? {
-        prompt: a.prompt,
-        gameType,
-        word: a.word?.filipinoWord,
-        emoji: a.word?.emoji ?? undefined,
-        imageUrl: a.word?.imageUrl ?? undefined,
-        wrong: 0,
-        total: 0,
-      };
-      row.total++;
-      if (!a.isCorrect) row.wrong++;
-      tally.set(key, row);
-    }
-
-    return [...tally.values()]
-      .filter((r) => r.wrong > 0)
-      .sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total)
-      .slice(0, limit);
+    return tallyMissed(answers.map((a) => ({ ...a, gameType: a.session.game.gameType }))).slice(0, limit);
   }
 
   /** Research export: one row per round (game_sessions). */
@@ -205,12 +305,8 @@ export class ReportsService {
     const byId = new Map(roster.map((p, i) => [p.id, { name: p.name, code: 'P' + String(i + 1).padStart(width, '0') }]));
 
     const ids = filter.pupilId ? roster.filter((p) => p.id === filter.pupilId).map((p) => p.id) : roster.map((p) => p.id);
-    const playedAt: Prisma.DateTimeFilter = {};
-    if (filter.from) playedAt.gte = filter.from;
-    if (filter.to) playedAt.lt = filter.to;
-
     return {
-      where: { pupilId: { in: ids }, playedAt } satisfies Prisma.GameSessionWhereInput,
+      where: { pupilId: { in: ids }, playedAt: playedAtFilter(filter) } satisfies Prisma.GameSessionWhereInput,
       pupilCols: filter.anonymize ? ['pupil_code'] : ['pupil_id', 'pupil_name'],
       pupilCells: (pupilId: number) =>
         filter.anonymize ? [byId.get(pupilId)?.code] : [pupilId, byId.get(pupilId)?.name],

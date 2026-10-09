@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Param, ParseIntPipe, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { ExportFilter, ReportsService } from './reports.service';
+import { DayRange, ExportFilter, ReportsService } from './reports.service';
 import { manilaDayStart, manilaToday } from './csv';
 import { CurrentUser, TeacherGuard } from '../auth/guards';
 import { JwtUser } from '../auth/jwt.strategy';
@@ -30,9 +30,10 @@ export class ReportsController {
     return this.reports.missedItems(user.id, undefined, limit ? Number(limit) : 10);
   }
 
+  /** ?from=YYYY-MM-DD&to=YYYY-MM-DD (inclusive, Asia/Manila days); no dates = all time. */
   @Get('pupil/:id')
-  pupil(@CurrentUser() user: JwtUser, @Param('id', ParseIntPipe) id: number) {
-    return this.reports.pupil(user.id, id);
+  pupil(@CurrentUser() user: JwtUser, @Param('id', ParseIntPipe) id: number, @Query() q: Record<string, string>) {
+    return this.reports.pupil(user.id, id, dayRange(q));
   }
 
   @Get('export/sessions.csv')
@@ -52,6 +53,22 @@ export class ReportsController {
 
 /** ?from=YYYY-MM-DD&to=YYYY-MM-DD (inclusive, Asia/Manila days), ?pupilId=, ?anonymize=true */
 function exportFilter(q: Record<string, string>): ExportFilter {
+  const { from, to } = dayRange(q);
+
+  let pupilId: number | undefined;
+  if (q.pupilId) {
+    pupilId = Number(q.pupilId);
+    if (!Number.isInteger(pupilId) || pupilId <= 0) throw new BadRequestException('pupilId must be a number');
+  }
+  return { from, to, pupilId, anonymize: q.anonymize === 'true' };
+}
+
+/**
+ * ?from= and ?to= as whole Asia/Manila days: from is the start of its day
+ * (inclusive), to becomes the start of the next day (exclusive). Shared by the
+ * CSV exports and the pupil report so both select the same rounds.
+ */
+function dayRange(q: Record<string, string>): DayRange {
   const day = (name: string) => {
     if (!q[name]) return undefined;
     const d = manilaDayStart(q[name]);
@@ -62,13 +79,7 @@ function exportFilter(q: Record<string, string>): ExportFilter {
   const toStart = day('to');
   const to = toStart ? new Date(toStart.getTime() + 86400000) : undefined;
   if (from && to && from >= to) throw new BadRequestException('from must not be after to');
-
-  let pupilId: number | undefined;
-  if (q.pupilId) {
-    pupilId = Number(q.pupilId);
-    if (!Number.isInteger(pupilId) || pupilId <= 0) throw new BadRequestException('pupilId must be a number');
-  }
-  return { from, to, pupilId, anonymize: q.anonymize === 'true' };
+  return { from, to };
 }
 
 function sendCsv(res: Response, kind: string) {
