@@ -115,9 +115,11 @@ export const api = {
 
   // reports
   summary: () => request('/reports/summary'),
-  classScores: () => request('/reports/class'),
+  classScores: (query = '') => request(`/reports/class${query}`),
+  classReport: (query = '') => request(`/reports/class-report${query}`),
   recent: () => request('/reports/recent'),
-  missed: (limit = 8) => request(`/reports/missed?limit=${limit}`),
+  /** query is '' or '?from=…&to=…', as for pupilReport. */
+  missed: (limit = 8, query = '') => request(`/reports/missed?limit=${limit}${query.replace('?', '&')}`),
   /** query is '' or '?from=YYYY-MM-DD&to=YYYY-MM-DD' (either date may be left out). */
   pupilReport: (id: number, query = '') => request(`/reports/pupil/${id}${query}`),
   exportCsv: (kind: 'sessions' | 'answers', query: string) =>

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { SelectField } from '@/components/ui/SelectField';
+import { MIN_DATE, rangeError, rangeLabel, rangeQuery, todayIso } from '@/lib/report-dates';
 
 export default function ReportsPage() {
   return (
@@ -29,8 +30,9 @@ function Reports() {
   const [klass, setKlass] = useState<any[]>([]);
   const [missed, setMissed] = useState<any[]>([]);
   const [report, setReport] = useState<any>(null);
-  const [reportError, setReportError] = useState('');
+  const [error, setError] = useState('');
   const [classLoading, setClassLoading] = useState(true);
+  const [withDetails, setWithDetails] = useState(false);
 
   useEffect(() => {
     api.pupils().then(setPupils).catch(() => {});
@@ -39,25 +41,34 @@ function Reports() {
   useEffect(() => {
     let stale = false;
     setReport(null);
-    setReportError('');
+    setError('');
+    const bad = rangeError(from, to);
+    if (bad) {
+      setError(bad);
+      setClassLoading(false);
+      return;
+    }
+    const query = rangeQuery(from, to);
+    const failed = (e: any) => !stale && setError(e?.status === 400 ? e.message : 'Subukan muli mamaya.');
     if (pupilId) {
-      if (from && to && from > to) {
-        setReportError('Ang "From" na petsa ay dapat bago o kapareho ng "To". (From must not be after To.)');
-        return;
-      }
       api
-        .pupilReport(Number(pupilId), rangeQuery(from, to))
+        .pupilReport(Number(pupilId), query)
         .then((r) => {
           if (stale) return;
           if (r) setReport(r);
-          else setReportError('Hindi mahanap ang pupil na ito.');
+          else setError('Hindi mahanap ang pupil na ito.');
         })
-        .catch((e) => !stale && setReportError(e?.status === 400 ? e.message : 'Subukan muli, o pumili ng ibang pupil.'));
+        .catch(failed);
     } else {
-      Promise.all([
-        api.classScores().then(setKlass).catch(() => {}),
-        api.missed(10).then(setMissed).catch(() => {}),
-      ]).finally(() => setClassLoading(false));
+      setClassLoading(true);
+      Promise.all([api.classScores(query), api.missed(10, query)])
+        .then(([k, m]) => {
+          if (stale) return;
+          setKlass(k);
+          setMissed(m);
+        })
+        .catch(failed)
+        .finally(() => !stale && setClassLoading(false));
     }
     return () => {
       stale = true;
@@ -66,20 +77,15 @@ function Reports() {
 
   /** Change the pupil and/or dates in the URL, so a refresh or shared link keeps them. */
   function go(next: { pupil?: string; from?: string; to?: string }) {
-    const q = new URLSearchParams();
     const p = next.pupil ?? pupilId ?? '';
-    if (p) {
-      q.set('pupil', p);
-      const f = next.from ?? from;
-      const t = next.to ?? to;
-      if (f) q.set('from', f);
-      if (t) q.set('to', t);
-    }
-    const qs = q.toString();
-    router.push(qs ? `/reports?${qs}` : '/reports');
+    router.push('/reports' + rangeQuery(next.from ?? from, next.to ?? to, p ? { pupil: p } : {}));
   }
 
   const pupilOptions = pupils.map((p) => ({ value: String(p.id), label: p.name }));
+  const today = todayIso();
+  const printHref =
+    '/reports/print' +
+    rangeQuery(from, to, pupilId ? { scope: 'pupil', pupil: pupilId } : { scope: 'class', ...(withDetails ? { details: '1' } : {}) });
 
   return (
     <>
@@ -88,67 +94,57 @@ function Reports() {
           className="w-full sm:w-64"
           label="Show report for"
           value={pupilId ?? ''}
-          onChange={(v) => (v ? go({ pupil: v }) : router.push('/reports'))}
+          onChange={(v) => go({ pupil: v })}
           options={[{ value: '', label: 'Whole class' }, ...pupilOptions]}
         />
-        {pupilId ? (
-          <>
-            <div>
-              <label className="label" htmlFor="report-from">From</label>
-              <input id="report-from" type="date" className="input w-auto" value={from} max={to || undefined} onChange={(e) => go({ from: e.target.value })} />
-            </div>
-            <div>
-              <label className="label" htmlFor="report-to">To</label>
-              <input id="report-to" type="date" className="input w-auto" value={to} min={from || undefined} onChange={(e) => go({ to: e.target.value })} />
-            </div>
-            {from || to ? (
-              <Button variant="secondary" onClick={() => go({ from: '', to: '' })}>Lahat ng petsa</Button>
-            ) : null}
-            <Link className="btn-ghost" href="/reports">Whole class</Link>
-          </>
+        <div>
+          <label className="label" htmlFor="report-from">From</label>
+          <input id="report-from" type="date" className="input w-auto" value={from} min={MIN_DATE} max={to || today} onChange={(e) => go({ from: e.target.value })} />
+        </div>
+        <div>
+          <label className="label" htmlFor="report-to">To</label>
+          <input id="report-to" type="date" className="input w-auto" value={to} min={from || MIN_DATE} max={today} onChange={(e) => go({ to: e.target.value })} />
+        </div>
+        {from || to ? (
+          <Button variant="secondary" onClick={() => go({ from: '', to: '' })}>Lahat ng petsa</Button>
         ) : null}
+        {pupilId ? <Button variant="secondary" onClick={() => go({ pupil: '' })}>Whole class</Button> : null}
       </div>
 
-      {pupilId ? (
-        reportError ? (
-          <section className="panel">
-            <EmptyState
-              icon="⚠️"
-              title="Hindi ma-load ang report"
-              message={reportError}
-              action={from || to ? { label: 'Lahat ng petsa', onClick: () => go({ from: '', to: '' }) } : undefined}
-            />
-          </section>
-        ) : (
-          <PupilReport report={report} rangeLabel={rangeLabel(from, to)} ranged={!!(from || to)} />
-        )
+      {!error ? (
+        <div className="flex flex-wrap items-center gap-4">
+          <Link className="btn-primary" href={printHref}>
+            {pupilId ? '🖨️ I-print ang report' : '🖨️ I-print ang report ng klase'}
+          </Link>
+          {!pupilId ? (
+            <label className="flex items-center gap-2 text-sm text-ink2">
+              <input type="checkbox" checked={withDetails} onChange={(e) => setWithDetails(e.target.checked)} />
+              Isama ang report ng bawat pupil
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? (
+        <section className="panel">
+          <EmptyState
+            icon="⚠️"
+            title="Hindi ma-load ang report"
+            message={error}
+            action={from || to ? { label: 'Lahat ng petsa', onClick: () => go({ from: '', to: '' }) } : undefined}
+          />
+        </section>
+      ) : pupilId ? (
+        <PupilReport report={report} rangeLabel={rangeLabel(from, to)} ranged={!!(from || to)} />
       ) : classLoading ? (
         <section className="panel"><LoadingState message="Kinukuha ang report…" /></section>
       ) : (
-        <ClassReport klass={klass} missed={missed} />
+        <ClassReport klass={klass} missed={missed} rangeLabel={rangeLabel(from, to)} ranged={!!(from || to)} />
       )}
 
       <ExportCsv pupilOptions={pupilOptions} />
     </>
   );
-}
-
-function rangeQuery(from: string, to: string) {
-  const q = new URLSearchParams();
-  if (from) q.set('from', from);
-  if (to) q.set('to', to);
-  const qs = q.toString();
-  return qs ? `?${qs}` : '';
-}
-
-/** "Oct 1 – Oct 9, 2026", "From Oct 1, 2026", "Until Oct 9, 2026" or "All dates". */
-function rangeLabel(from: string, to: string) {
-  const fmt = (d: string, withYear = true) =>
-    new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) });
-  if (from && to) return `${fmt(from, from.slice(0, 4) !== to.slice(0, 4))} – ${fmt(to)}`;
-  if (from) return `From ${fmt(from)}`;
-  if (to) return `Until ${fmt(to)}`;
-  return 'All dates';
 }
 
 /** Research data for Chapter 4 — raw rounds and answers as Excel-ready CSV. */
@@ -189,11 +185,11 @@ function ExportCsv({ pupilOptions }: { pupilOptions: { value: string; label: str
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <label className="label">From</label>
-            <input type="date" className="input w-auto" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+            <input type="date" className="input w-auto" value={from} min={MIN_DATE} max={to || todayIso()} onChange={(e) => setFrom(e.target.value)} />
           </div>
           <div>
             <label className="label">To</label>
-            <input type="date" className="input w-auto" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+            <input type="date" className="input w-auto" value={to} min={from || MIN_DATE} max={todayIso()} onChange={(e) => setTo(e.target.value)} />
           </div>
           <SelectField
             className="w-full sm:w-56"
@@ -221,7 +217,7 @@ function ExportCsv({ pupilOptions }: { pupilOptions: { value: string; label: str
   );
 }
 
-function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
+function ClassReport({ klass, missed, rangeLabel, ranged }: { klass: any[]; missed: any[]; rangeLabel: string; ranged: boolean }) {
   const maxWrong = Math.max(1, ...missed.map((m) => m.wrong));
   const pager = usePagination(klass);
 
@@ -230,7 +226,9 @@ function ClassReport({ klass, missed }: { klass: any[]; missed: any[] }) {
       <section className="panel overflow-x-auto">
         <div className="border-b border-line px-5 py-3">
           <h2 className="text-sm font-bold">Highest scores — whole class</h2>
-          <p className="text-xs text-ink3">Best points per mini-game and level (only the highest score is kept)</p>
+          <p className="text-xs text-ink3">
+            {ranged ? `Best round per mini-game and level within ${rangeLabel}` : 'Best points per mini-game and level (only the highest score is kept)'}
+          </p>
         </div>
         <table className="w-full text-sm">
           <thead>

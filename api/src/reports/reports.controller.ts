@@ -15,9 +15,16 @@ export class ReportsController {
     return this.reports.summary(user.id);
   }
 
+  /** ?from=&to= as in the pupil report; no dates = all time. */
   @Get('class')
-  classScores(@CurrentUser() user: JwtUser) {
-    return this.reports.classScores(user.id);
+  classScores(@CurrentUser() user: JwtUser, @Query() q: Record<string, string>) {
+    return this.reports.classScores(user.id, dayRange(q));
+  }
+
+  /** Everything the printable class report needs in one call; ?details=1 adds every pupil's full report. */
+  @Get('class-report')
+  classReport(@CurrentUser() user: JwtUser, @Query() q: Record<string, string>) {
+    return this.reports.classReport(user.id, dayRange(q), q.details === '1' || q.details === 'true');
   }
 
   @Get('recent')
@@ -26,8 +33,8 @@ export class ReportsController {
   }
 
   @Get('missed')
-  missed(@CurrentUser() user: JwtUser, @Query('limit') limit?: string) {
-    return this.reports.missedItems(user.id, undefined, limit ? Number(limit) : 10);
+  missed(@CurrentUser() user: JwtUser, @Query() q: Record<string, string>) {
+    return this.reports.missedItems(user.id, undefined, q.limit ? Number(q.limit) : 10, dayRange(q));
   }
 
   /** ?from=YYYY-MM-DD&to=YYYY-MM-DD (inclusive, Asia/Manila days); no dates = all time. */
@@ -73,6 +80,8 @@ function dayRange(q: Record<string, string>): DayRange {
     if (!q[name]) return undefined;
     const d = manilaDayStart(q[name]);
     if (!d) throw new BadRequestException(`${name} must be a date like 2026-09-27`);
+    const year = Number(q[name].slice(0, 4));
+    if (year < 2025 || year > 2100) throw new BadRequestException(`${name} must be a date from 2025 to 2100 (got ${q[name]})`);
     return d;
   };
   const from = day('from');

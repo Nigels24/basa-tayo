@@ -37,3 +37,94 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold;
   }
 }
+
+/* Printable progress report (/reports/print) — A4, black on white, Print / Save as PDF. */
+@page {
+  size: A4 portrait;
+  margin: 13mm 14mm;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}
+
+.report {
+  color: #000;
+  font-size: 10.5pt;
+  line-height: 1.35;
+}
+.report h2 {
+  margin: 14pt 0 5pt;
+  font-size: 12pt;
+  font-weight: 700;
+}
+.report h3 {
+  margin: 12pt 0 4pt;
+  font-size: 11pt;
+  font-weight: 700;
+}
+.report h2,
+.report h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+.report table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.report thead {
+  display: table-header-group; /* repeat column headers on every printed page */
+}
+.report th,
+.report td {
+  border: 1px solid #000;
+  padding: 3pt 5pt;
+  text-align: left;
+  vertical-align: top;
+}
+.report th {
+  background: #eee;
+  font-weight: 700;
+}
+.report table.compact {
+  font-size: 9pt;
+}
+.report table.compact th,
+.report table.compact td {
+  padding: 2pt 4pt;
+}
+.report .center {
+  text-align: center;
+}
+.report .right {
+  text-align: right;
+}
+.report .stars {
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.report .group {
+  font-weight: 700;
+  background: #f5f5f5;
+}
+.report .answers {
+  font-size: 8.5pt;
+  border-top: 0;
+}
+.report .note {
+  margin-bottom: 4pt;
+  font-size: 9pt;
+}
+/* Keep a round with its answers, a word group, a pupil header and the signatures on one page. */
+.report tr,
+.report .keep {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.report .new-page {
+  break-before: page;
+  page-break-before: always;
+}

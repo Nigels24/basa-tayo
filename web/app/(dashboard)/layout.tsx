@@ -20,11 +20,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [teacher, setTeacher] = useState<any>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     if (!getToken()) router.replace('/login');
-    else setTeacher(getTeacher());
+    else {
+      setTeacher(getTeacher());
+      setSignedIn(true);
+    }
   }, []);
+
+  // The printable report uses the same login check but none of the dashboard chrome.
+  if (pathname.startsWith('/reports/print')) return signedIn ? <>{children}</> : null;
 
   return (
     <div className="grid min-h-screen md:grid-cols-[232px_minmax(0,1fr)]">

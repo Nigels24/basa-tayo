@@ -66,7 +66,7 @@ function missedByCategory(answers: (AnswerRow & { level: Level })[]) {
  * Highest score per mini-game and level from a set of rounds, by the same rule
  * as the scores table: a later round replaces the best only with more points.
  */
-function bestPerGame(sessions: { game: { gameType: GameType }; level: Level; score: number; stars: number; playedAt: Date; id: number }[]) {
+function bestPerGame(sessions: { game: { gameType: GameType }; level: Level; score: number; stars: number; playedAt: Date; id: number }[]): { gameType: GameType; level: Level; highestScore: number; stars: number }[] {
   const oldestFirst = [...sessions].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime() || a.id - b.id);
   const best = new Map<string, { gameType: GameType; level: Level; highestScore: number; stars: number }>();
   for (const s of oldestFirst) {
@@ -117,28 +117,61 @@ export class ReportsService {
     return { pupils: ids.length, words: wordCount, roundsThisWeek: weekCount, totalRounds: sessions.length, avgAccuracy };
   }
 
-  /** Highest score per pupil, mini-game and level — the class matrix. */
-  async classScores(teacherId: number) {
+  /**
+   * Highest score per pupil, mini-game and level — the class matrix — with
+   * rounds and average accuracy. With a range, all of it comes from the rounds
+   * played in that range, by the same rule as the pupil report.
+   */
+  async classScores(teacherId: number, range: DayRange = {}) {
+    const ranged = !!(range.from || range.to);
     const pupils = await this.prisma.user.findMany({
       where: { role: 'PUPIL', teacherId, active: true },
-      include: {
-        scores: { include: { game: { select: { gameType: true } } } },
-        _count: { select: { sessions: true } },
-      },
+      include: { scores: { include: { game: { select: { gameType: true } } } } },
       orderBy: { name: 'asc' },
     });
+    const sessions = await this.prisma.gameSession.findMany({
+      where: { pupilId: { in: pupils.map((p) => p.id) }, playedAt: playedAtFilter(range) },
+      select: { id: true, pupilId: true, level: true, score: true, stars: true, accuracy: true, playedAt: true, game: { select: { gameType: true } } },
+    });
 
-    return pupils.map((p) => ({
-      id: p.id,
-      name: p.name,
-      rounds: p._count.sessions,
-      scores: p.scores.map((s) => ({
-        gameType: s.game.gameType,
-        level: s.level,
-        highestScore: s.highestScore,
-        stars: s.stars,
-      })),
-    }));
+    return pupils.map((p) => {
+      const own = sessions.filter((s) => s.pupilId === p.id);
+      return {
+        id: p.id,
+        name: p.name,
+        section: p.section,
+        rounds: own.length,
+        avgAccuracy: own.length ? Math.round(own.reduce((a, s) => a + s.accuracy, 0) / own.length) : 0,
+        scores: ranged
+          ? bestPerGame(own)
+          : p.scores.map((s) => ({ gameType: s.game.gameType, level: s.level, highestScore: s.highestScore, stars: s.stars })),
+      };
+    });
+  }
+
+  /**
+   * The printable class report in one call: class summary, the class matrix,
+   * the 10 most-missed items and, with details, every active pupil's report.
+   */
+  async classReport(teacherId: number, range: DayRange = {}, details = false) {
+    const [pupils, missed] = await Promise.all([this.classScores(teacherId, range), this.missedItems(teacherId, undefined, 10, range)]);
+    const rounds = pupils.reduce((a, p) => a + p.rounds, 0);
+    const accuracy = await this.prisma.gameSession.aggregate({
+      where: { pupilId: { in: pupils.map((p) => p.id) }, playedAt: playedAtFilter(range) },
+      _avg: { accuracy: true },
+    });
+
+    // One pupil at a time keeps the connection pool free for a class of ~40.
+    const reports = [];
+    if (details) for (const p of pupils) reports.push(await this.pupil(teacherId, p.id, range));
+
+    return {
+      range: { from: range.from ?? null, to: range.to ?? null }, // to is exclusive
+      summary: { pupils: pupils.length, rounds, avgAccuracy: Math.round(accuracy._avg.accuracy ?? 0) },
+      pupils,
+      missed,
+      reports: details ? reports : undefined,
+    };
   }
 
   /**
@@ -218,12 +251,12 @@ export class ReportsService {
    * Items most frequently answered incorrectly — the report the manuscript
    * promises. This is what the session_answers table exists for.
    */
-  async missedItems(teacherId: number, pupilId?: number, limit = 10) {
+  async missedItems(teacherId: number, pupilId?: number, limit = 10, range: DayRange = {}) {
     const pupils = await this.prisma.user.findMany({ where: { role: 'PUPIL', teacherId }, select: { id: true } });
     const ids = pupilId ? [pupilId] : pupils.map((p) => p.id);
 
     const answers = await this.prisma.sessionAnswer.findMany({
-      where: { pupilId: { in: ids } },
+      where: { pupilId: { in: ids }, ...(range.from || range.to ? { session: { playedAt: playedAtFilter(range) } } : {}) },
       select: { prompt: true, isCorrect: true, word: { select: { filipinoWord: true, emoji: true, imageUrl: true } }, session: { select: { game: { select: { gameType: true } } } } },
     });
 
