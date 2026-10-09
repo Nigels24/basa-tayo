@@ -11,6 +11,7 @@ import { SelectField } from '@/components/ui/SelectField';
 import { SearchIcon, TextInput } from '@/components/ui/TextInput';
 import { toastError, toastSuccess } from '@/components/ui/toast';
 import { AudioUpload, PictureUpload, PlayButton } from '@/components/MediaUpload';
+import { SpeakButton, TtsPreview } from '@/components/TextToSpeech';
 import { EMOJI_GROUPS, GRID_EMOJI, PickEmoji, emojiNeedle, loadMoreEmoji, searchCurated, searchMore } from '@/lib/emoji-list';
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' }); // 👨‍👩‍👧, 👋🏽 and flags count as one
@@ -294,7 +295,10 @@ export default function WordsPage() {
                       Recording
                     </span>
                   ) : (
-                    'Text-to-speech'
+                    <span className="flex items-center gap-2">
+                      <SpeakButton text={w.filipinoWord} />
+                      Text-to-speech
+                    </span>
                   )}
                 </td>
                 <td className="td text-right whitespace-nowrap">
@@ -451,6 +455,7 @@ export default function WordsPage() {
                   onChange={(audioUrl) => setForm((f) => f && { ...f, audioUrl })}
                   onBusyChange={(audio) => setUploading((u) => ({ ...u, audio }))}
                 />
+                <TtsPreview word={form.word} hasRecording={!!form.audioUrl} />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
