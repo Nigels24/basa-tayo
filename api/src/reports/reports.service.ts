@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { GameType, Level, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { manilaDateTime, toCsv } from './csv';
@@ -188,7 +188,7 @@ export class ReportsService {
         scores: { include: { game: { select: { gameType: true } } } },
       },
     });
-    if (!pupil) return null;
+    if (!pupil) throw new NotFoundException('Hindi mahanap ang pupil na ito');
 
     const sessions = await this.prisma.gameSession.findMany({
       where: { pupilId, playedAt: playedAtFilter(range) },
@@ -253,7 +253,7 @@ export class ReportsService {
    */
   async missedItems(teacherId: number, pupilId?: number, limit = 10, range: DayRange = {}) {
     const pupils = await this.prisma.user.findMany({ where: { role: 'PUPIL', teacherId }, select: { id: true } });
-    const ids = pupilId ? [pupilId] : pupils.map((p) => p.id);
+    const ids = pupils.map((p) => p.id).filter((id) => !pupilId || id === pupilId);
 
     const answers = await this.prisma.sessionAnswer.findMany({
       where: { pupilId: { in: ids }, ...(range.from || range.to ? { session: { playedAt: playedAtFilter(range) } } : {}) },

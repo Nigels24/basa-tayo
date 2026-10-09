@@ -9,17 +9,42 @@ export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export function getTeacher() {
+export function getTeacher(): Teacher | null {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem(NAME_KEY);
   return raw ? JSON.parse(raw) : null;
 }
 
-export async function login(username: string, password: string) {
-  const res = await request('/auth/teacher/login', { method: 'POST', body: { username, password } });
+export type Teacher = { id: number; name: string; username: string; school: string | null; section: string | null };
+
+/** Fired on window when the stored teacher changes, so the header follows the Aking Account page. */
+export const TEACHER_EVENT = 'basatayo:teacher';
+
+export function setTeacher(teacher: Teacher) {
+  localStorage.setItem(NAME_KEY, JSON.stringify(teacher));
+  window.dispatchEvent(new Event(TEACHER_EVENT));
+}
+
+function startSession(res: { token: string; teacher: Teacher }) {
   localStorage.setItem(TOKEN_KEY, res.token);
-  localStorage.setItem(NAME_KEY, JSON.stringify(res.teacher));
+  setTeacher(res.teacher);
   return res.teacher;
+}
+
+export async function login(username: string, password: string) {
+  return startSession(await request('/auth/teacher/login', { method: 'POST', body: { username, password }, public: true }));
+}
+
+/** Sign-up returns the same payload as login, so she is signed in right away. */
+export async function registerTeacher(body: {
+  fullName: string;
+  school: string;
+  section?: string;
+  username: string;
+  password: string;
+  registrationCode: string;
+}) {
+  return startSession(await request('/auth/register-teacher', { method: 'POST', body, public: true }));
 }
 
 export function logout() {
@@ -34,8 +59,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function request(path: string, opts: { method?: string; body?: any } = {}) {
-  const token = getToken();
+/**
+ * opts.public: a call made without being signed in (log in, sign up), where a
+ * 401/403 is a wrong password or registration code to show, not a lost session.
+ */
+export async function request(path: string, opts: { method?: string; body?: any; public?: boolean } = {}) {
+  const token = opts.public ? null : getToken();
   const res = await fetch(BASE + path, {
     method: opts.method ?? 'GET',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -43,7 +72,7 @@ export async function request(path: string, opts: { method?: string; body?: any 
     cache: 'no-store',
   });
 
-  if (res.status === 401 || res.status === 403) {
+  if (!opts.public && (res.status === 401 || res.status === 403)) {
     logout();
     if (typeof window !== 'undefined') window.location.href = '/login';
     throw new Error('Please log in again');
@@ -93,6 +122,14 @@ export async function download(path: string, fallbackName: string) {
 }
 
 export const api = {
+  // account
+  registrationStatus: (): Promise<{ open: boolean }> => request('/auth/registration-status', { public: true }),
+  me: (): Promise<Teacher> => request('/auth/me'),
+  updateMe: (body: { fullName: string; school: string; section: string }): Promise<Teacher> =>
+    request('/auth/me', { method: 'PATCH', body }),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request('/auth/change-password', { method: 'POST', body }),
+
   // word bank
   words: (query = '') => request('/words' + query),
   createWord: (body: any) => request('/words', { method: 'POST', body }),

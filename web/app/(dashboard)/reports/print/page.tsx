@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { rangeError, rangeLabel, rangeQuery, todayIso } from '@/lib/report-dates';
 
-const SCHOOL = 'Dumingag Central Elementary School';
 const TITLE = 'Ulat ng Pag-unlad sa Pagbasa (Basa Tayo!)';
 const MAX_STARS = 3;
 
@@ -47,7 +46,8 @@ function PrintReport() {
       setError(bad);
       return;
     }
-    const failed = (e: any) => !stale && setError(e?.status === 400 ? e.message : 'Hindi ma-load ang report. Subukan muli mamaya.');
+    const failed = (e: any) =>
+      !stale && setError(e?.status === 400 ? e.message : e?.status === 404 ? 'Hindi mahanap ang pupil na ito.' : 'Hindi ma-load ang report. Subukan muli mamaya.');
     const load =
       scope === 'pupil'
         ? api.pupilReport(Number(pupilId), rangeQuery(from, to))
@@ -77,8 +77,9 @@ function PrintReport() {
   }, [data, scope, from, to]);
 
   const backHref = '/reports' + rangeQuery(from, to, scope === 'pupil' && pupilId ? { pupil: pupilId } : {});
-  const teacher = getTeacher()?.name ?? '';
-  const header = { teacher, coverage: from || to ? `Petsa: ${rangeLabel(from, to)}` : 'Lahat ng petsa' };
+  const me = getTeacher(); // kept fresh by the dashboard layout
+  const teacher = me?.name ?? '';
+  const header = { teacher, school: me?.school ?? '', section: me?.section ?? '', coverage: from || to ? `Petsa: ${rangeLabel(from, to)}` : 'Lahat ng petsa' };
   const ranged = !!(from || to);
 
   return (
@@ -130,13 +131,13 @@ function playedAt(d: string) {
   return new Date(d).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-function ReportHeader({ teacher, coverage }: { teacher: string; coverage: string }) {
+function ReportHeader({ teacher, school, section, coverage }: { teacher: string; school: string; section: string; coverage: string }) {
   const prepared = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'long', day: 'numeric' });
   return (
     <header className="keep mb-4 border-b-2 border-black pb-2 text-center">
-      <p className="text-[10pt] font-bold uppercase tracking-wide">{SCHOOL}</p>
+      {school ? <p className="text-[10pt] font-bold uppercase tracking-wide">{school}</p> : null}
       <h1 className="text-[15pt] font-bold">{TITLE}</h1>
-      <p className="text-[10pt]">Grade 1 · Guro: {teacher || '—'}</p>
+      <p className="text-[10pt]">Grade 1{section ? ` – ${section}` : ''} · Guro: {teacher || '—'}</p>
       <p className="text-[10pt]">{coverage} · Inihanda noong: {prepared}</p>
     </header>
   );

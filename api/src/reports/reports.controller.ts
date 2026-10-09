@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Get, Param, ParseIntPipe, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { DayRange, ExportFilter, ReportsService } from './reports.service';
-import { manilaDayStart, manilaToday } from './csv';
+import { ExportFilter, ReportsService } from './reports.service';
+import { dayRange, manilaToday } from './csv';
 import { CurrentUser, TeacherGuard } from '../auth/guards';
 import { JwtUser } from '../auth/jwt.strategy';
 
@@ -68,27 +68,6 @@ function exportFilter(q: Record<string, string>): ExportFilter {
     if (!Number.isInteger(pupilId) || pupilId <= 0) throw new BadRequestException('pupilId must be a number');
   }
   return { from, to, pupilId, anonymize: q.anonymize === 'true' };
-}
-
-/**
- * ?from= and ?to= as whole Asia/Manila days: from is the start of its day
- * (inclusive), to becomes the start of the next day (exclusive). Shared by the
- * CSV exports and the pupil report so both select the same rounds.
- */
-function dayRange(q: Record<string, string>): DayRange {
-  const day = (name: string) => {
-    if (!q[name]) return undefined;
-    const d = manilaDayStart(q[name]);
-    if (!d) throw new BadRequestException(`${name} must be a date like 2026-09-27`);
-    const year = Number(q[name].slice(0, 4));
-    if (year < 2025 || year > 2100) throw new BadRequestException(`${name} must be a date from 2025 to 2100 (got ${q[name]})`);
-    return d;
-  };
-  const from = day('from');
-  const toStart = day('to');
-  const to = toStart ? new Date(toStart.getTime() + 86400000) : undefined;
-  if (from && to && from >= to) throw new BadRequestException('from must not be after to');
-  return { from, to };
 }
 
 function sendCsv(res: Response, kind: string) {

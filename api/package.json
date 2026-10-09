@@ -10,6 +10,8 @@
     "start:prod": "node dist/main",
     "seed": "ts-node prisma/seed.ts",
     "reset:test-data": "ts-node prisma/reset-test-data.ts",
+    "teacher": "ts-node prisma/create-teacher.ts",
+    "export:research": "ts-node prisma/export-research.ts",
     "prisma:studio": "prisma studio"
   },
   "prisma": {

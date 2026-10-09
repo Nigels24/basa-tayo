@@ -49,7 +49,8 @@ function Reports() {
       return;
     }
     const query = rangeQuery(from, to);
-    const failed = (e: any) => !stale && setError(e?.status === 400 ? e.message : 'Subukan muli mamaya.');
+    const failed = (e: any) =>
+      !stale && setError(e?.status === 400 ? e.message : e?.status === 404 ? 'Hindi mahanap ang pupil na ito.' : 'Subukan muli mamaya.');
     if (pupilId) {
       api
         .pupilReport(Number(pupilId), query)

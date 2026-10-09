@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, getTeacher } from '@/lib/api';
 import { Pagination, usePagination } from '@/components/Pagination';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -33,7 +33,7 @@ export default function PupilsPage() {
     setOpening(true);
     try {
       const { code } = await api.newCode();
-      setForm({ id: 0, name: '', section: 'Sampaguita', loginCode: code });
+      setForm({ id: 0, name: '', section: getTeacher()?.section ?? '', loginCode: code });
     } catch (err) {
       toastError(err);
     } finally {

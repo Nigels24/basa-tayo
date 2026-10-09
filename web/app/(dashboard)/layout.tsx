@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { getTeacher, getToken, logout } from '@/lib/api';
+import { api, getTeacher, getToken, logout, setTeacher as storeTeacher, Teacher, TEACHER_EVENT } from '@/lib/api';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const NAV = [
@@ -12,22 +12,33 @@ const NAV = [
   { href: '/lessons', label: 'Lessons' },
   { href: '/pupils', label: 'Pupils' },
   { href: '/reports', label: 'Progress Reports' },
+  { href: '/account', label: 'Aking Account' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [teacher, setTeacher] = useState<any>(null);
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
-    if (!getToken()) router.replace('/login');
-    else {
-      setTeacher(getTeacher());
-      setSignedIn(true);
+    if (!getToken()) {
+      router.replace('/login');
+      return;
     }
+    setTeacher(getTeacher());
+    setSignedIn(true);
+
+    // The header follows the Aking Account page, and a fresh copy replaces what was saved at login.
+    const follow = () => setTeacher(getTeacher());
+    window.addEventListener(TEACHER_EVENT, follow);
+    api
+      .me()
+      .then(storeTeacher)
+      .catch(() => {});
+    return () => window.removeEventListener(TEACHER_EVENT, follow);
   }, []);
 
   // The printable report uses the same login check but none of the dashboard chrome.
