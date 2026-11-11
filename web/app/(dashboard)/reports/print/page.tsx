@@ -11,6 +11,25 @@ import { rangeError, rangeLabel, rangeQuery, todayIso } from '@/lib/report-dates
 
 const TITLE = 'Ulat ng Pag-unlad sa Pagbasa (Basa Tayo!)';
 const MAX_STARS = 3;
+// Files in web/public/logos (names kept as delivered; spaces are URL-encoded).
+const JH_LOGO = '/logos/JH%20Dumingag%20official%20Seal.jpg';
+const DEPED_LOGO = '/logos/Seal_of_the_Department_of_Education_of_the_Philippines.png';
+
+/** Open the print dialog only after every header logo has loaded, so they show up in the printout. */
+async function printWhenLogosReady() {
+  const logos = Array.from(document.querySelectorAll<HTMLImageElement>('.report img.report-logo'));
+  await Promise.all(
+    logos.map((img) =>
+      img.complete
+        ? null
+        : new Promise<void>((done) => {
+            img.addEventListener('load', () => done(), { once: true });
+            img.addEventListener('error', () => done(), { once: true }); // never block printing on a missing file
+          }),
+    ),
+  );
+  window.print();
+}
 
 /**
  * Printable progress report — /reports/print?scope=class|pupil&pupil=<id>&from=&to=&details=1
@@ -85,7 +104,7 @@ function PrintReport() {
   return (
     <div className="min-h-screen bg-ground py-6 print:bg-white print:py-0">
       <div className="mx-auto mb-4 flex max-w-[210mm] flex-wrap gap-3 px-4 print:hidden">
-        <Button onClick={() => window.print()} disabled={!data}>🖨️ I-print / Save as PDF</Button>
+        <Button onClick={() => void printWhenLogosReady()} disabled={!data}>🖨️ I-print / Save as PDF</Button>
         <Link className="btn-ghost" href={backHref}>Bumalik</Link>
         {data ? <span className="self-center text-xs text-ink3">Sa print dialog, piliin ang A4 at &quot;Save as PDF&quot; kung PDF ang kailangan.</span> : null}
       </div>
@@ -134,11 +153,17 @@ function playedAt(d: string) {
 function ReportHeader({ teacher, school, section, coverage }: { teacher: string; school: string; section: string; coverage: string }) {
   const prepared = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'long', day: 'numeric' });
   return (
-    <header className="keep mb-4 border-b-2 border-black pb-2 text-center">
-      {school ? <p className="text-[10pt] font-bold uppercase tracking-wide">{school}</p> : null}
-      <h1 className="text-[15pt] font-bold">{TITLE}</h1>
-      <p className="text-[10pt]">Grade 1{section ? ` – ${section}` : ''} · Guro: {teacher || '—'}</p>
-      <p className="text-[10pt]">{coverage} · Inihanda noong: {prepared}</p>
+    <header className="keep mb-4 flex items-center gap-3 border-b-2 border-black pb-2">
+      {/* eslint-disable-next-line @next/next/no-img-element -- plain img so the browser prints it as-is */}
+      <img className="report-logo" src={JH_LOGO} alt="Opisyal na seal ng JH Dumingag" />
+      <div className="min-w-0 flex-1 text-center">
+        {school ? <p className="text-[10pt] font-bold uppercase tracking-wide">{school}</p> : null}
+        <h1 className="text-[15pt] font-bold">{TITLE}</h1>
+        <p className="text-[10pt]">Grade 1{section ? ` – ${section}` : ''} · Guro: {teacher || '—'}</p>
+        <p className="text-[10pt]">{coverage} · Inihanda noong: {prepared}</p>
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element -- plain img so the browser prints it as-is */}
+      <img className="report-logo" src={DEPED_LOGO} alt="Seal ng Department of Education (DepEd)" />
     </header>
   );
 }

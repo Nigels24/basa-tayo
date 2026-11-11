@@ -124,6 +124,15 @@
   break-inside: avoid;
   page-break-inside: avoid;
 }
+/* JH (left) and DepEd (right) seals in the report header. */
+.report .report-logo {
+  flex: none;
+  height: 64px;
+  width: auto;
+  object-fit: contain;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 .report .new-page {
   break-before: page;
   page-break-before: always;
