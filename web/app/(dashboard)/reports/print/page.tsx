@@ -12,7 +12,7 @@ import { rangeError, rangeLabel, rangeQuery, todayIso } from '@/lib/report-dates
 const TITLE = 'Ulat ng Pag-unlad sa Pagbasa (Basa Tayo!)';
 const MAX_STARS = 3;
 // Files in web/public/logos (names kept as delivered; spaces are URL-encoded).
-const JH_LOGO = '/logos/JH%20Dumingag%20official%20Seal.jpg';
+const SCHOOL_LOGO = '/logos/Dumingag%20CES.jpg';
 const DEPED_LOGO = '/logos/Seal_of_the_Department_of_Education_of_the_Philippines.png';
 
 /** Open the print dialog only after every header logo has loaded, so they show up in the printout. */
@@ -155,7 +155,7 @@ function ReportHeader({ teacher, school, section, coverage }: { teacher: string;
   return (
     <header className="keep mb-4 flex items-center gap-3 border-b-2 border-black pb-2">
       {/* eslint-disable-next-line @next/next/no-img-element -- plain img so the browser prints it as-is */}
-      <img className="report-logo" src={JH_LOGO} alt="Opisyal na seal ng JH Dumingag" />
+      <img className="report-logo" src={SCHOOL_LOGO} alt="Logo ng Dumingag Central Elementary School" />
       <div className="min-w-0 flex-1 text-center">
         {school ? <p className="text-[10pt] font-bold uppercase tracking-wide">{school}</p> : null}
         <h1 className="text-[15pt] font-bold">{TITLE}</h1>

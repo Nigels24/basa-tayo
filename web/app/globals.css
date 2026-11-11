@@ -124,7 +124,7 @@
   break-inside: avoid;
   page-break-inside: avoid;
 }
-/* JH (left) and DepEd (right) seals in the report header. */
+/* Dumingag CES (left) and DepEd (right) seals in the report header. */
 .report .report-logo {
   flex: none;
   height: 64px;
