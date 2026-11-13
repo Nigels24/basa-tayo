@@ -22,7 +22,7 @@ export interface LevelRule {
 
 export const LEVELS: LevelRule[] = [
   { id: 'BEGINNER', name: 'Beginner', filipino: 'Baguhan', items: 5, choices: 3, audioReplays: -1, showModel: true, showFirstSyllable: false, distractorSyllable: false },
-  { id: 'INTERMEDIATE', name: 'Intermediate', filipino: 'Katamtaman', items: 8, choices: 4, audioReplays: 1, showModel: false, showFirstSyllable: true, distractorSyllable: false },
+  { id: 'INTERMEDIATE', name: 'Intermediate', filipino: 'Katamtaman', items: 8, choices: 4, audioReplays: 1, showModel: false, showFirstSyllable: false, distractorSyllable: false },
   { id: 'ADVANCED', name: 'Advanced', filipino: 'Mahusay', items: 10, choices: 4, audioReplays: 0, showModel: false, showFirstSyllable: false, distractorSyllable: true },
 ];
 

@@ -207,7 +207,7 @@ export default function Play() {
                     style={[s.slot, filled && s.slotFilled, feedback && (feedback.correct ? s.slotOk : s.slotNo)]}
                     onPress={() => !feedback && filled && setBuilt(built.filter((b) => b !== filled))}
                   >
-                    <Text style={s.slotText}>{filled ? filled.s : lv.showModel ? syl : ''}</Text>
+                    <Text style={s.slotText}>{filled ? filled.s : ''}</Text>
                   </Pressable>
                 );
               })}
